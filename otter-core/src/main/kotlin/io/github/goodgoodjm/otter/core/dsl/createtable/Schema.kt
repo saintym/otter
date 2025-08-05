@@ -9,12 +9,6 @@ class TableSchema(val name: String) {
     val columnSchemaMap: Map<String, ColumnSchema> get() = _columnSchemaMap
     private val _columnSchemaMap = mutableMapOf<String, ColumnSchema>()
 
-    @Deprecated("Use minus operator")
-    operator fun set(key: String, value: ColumnSchema) {
-        require(key.isNotEmpty())
-        pair(key, value)
-    }
-
     private fun pair(key: String, value: ColumnSchema) {
         _columnSchemaMap[key] = value
     }

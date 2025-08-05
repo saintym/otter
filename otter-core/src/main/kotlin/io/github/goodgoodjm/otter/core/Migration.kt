@@ -1,6 +1,5 @@
 package io.github.goodgoodjm.otter.core
 
-import io.github.goodgoodjm.otter.core.dsl.AlterColumnSchema
 import io.github.goodgoodjm.otter.core.dsl.SchemaContext
 import io.github.goodgoodjm.otter.core.dsl.SchemaMaker
 import io.github.goodgoodjm.otter.core.dsl.createtable.CreateTableContext
@@ -28,12 +27,6 @@ abstract class Migration {
         _contexts.add(table)
     }
 
-    @SchemaMaker
-    @Deprecated("", ReplaceWith("createTable(name, block)"))
-    fun createTable_(name: String, block: (TableSchema) -> Unit) {
-        createTable(name, block)
-    }
-
     fun dropTable(name: String) {
         _contexts.add(object : SchemaContext {
             override fun resolve(): List<String> = Table(name).dropStatement()
@@ -51,16 +44,5 @@ abstract class Migration {
         val tableSchema = AlterTableSchema(name).apply(block)
         val context = AlterTableContext(tableSchema)
         _contexts.add(context)
-    }
-
-    fun addColumn(block: AlterColumnSchema.() -> Unit) = alterColumn(AlterColumnSchema.Type.ADD, block)
-
-    fun dropColumn(block: AlterColumnSchema.() -> Unit) = alterColumn(AlterColumnSchema.Type.DROP, block)
-
-    private fun alterColumn(type: AlterColumnSchema.Type, block: AlterColumnSchema.() -> Unit) {
-        val alterColumnSchema = AlterColumnSchema()
-        alterColumnSchema.alterType = type
-        alterColumnSchema.block()
-        // _contexts.add(alterColumnSchema)
     }
 }
