@@ -35,11 +35,17 @@ class DynamicPrimaryKeyTable(name: String) : Table(name) {
         var column = registerColumn<Comparable<Any>>(name, columnSchema.columnType)
         columnSchema.constraints.forEach { constraint ->
             when (constraint) {
-                Constraint.PRIMARY, Constraint.NOT_NULL -> null
-                Constraint.NULLABLE -> column.columnType.nullable = true
-                Constraint.AUTO_INCREMENT -> column = column.autoIncrement()
-                Constraint.UNIQUE -> column = column.uniqueIndex()
-                else -> throw Exception("Constraint($constraint) is not supported")
+                is Constraint.PRIMARY, is Constraint.NOT_NULL -> null
+                is Constraint.NULLABLE -> column.columnType.nullable = true
+                is Constraint.AUTO_INCREMENT -> column = column.autoIncrement()
+                is Constraint.UNIQUE -> column = column.uniqueIndex()
+                is Constraint.DEFAULT -> {}
+                is Constraint.CHECK -> {}
+                is Constraint.REFERENCES -> {}
+                is Constraint.GENERATED -> {}
+                is Constraint.COLLATE -> {}
+                is Constraint.COMMENT -> {}
+                is Constraint.NONE -> null
             }
         }
 
@@ -50,7 +56,7 @@ class DynamicPrimaryKeyTable(name: String) : Table(name) {
             column.references(target)
         }
 
-        if (columnSchema.constraints.any { it == Constraint.PRIMARY }) {
+        if (columnSchema.constraints.any { it is Constraint.PRIMARY }) {
             primaryKeys += column
         }
     }
