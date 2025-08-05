@@ -25,7 +25,7 @@ class TableSchema(val name: String) {
     }
 }
 
-data class ColumnSchema internal constructor(
+data class ColumnSchema(
     val columnType: ColumnType,
     var constraints: List<Constraint> = listOf(),
     var foreignKey: String? = null,
@@ -42,6 +42,18 @@ infix fun ColumnSchema.constraints(constraint: Constraint): ColumnSchema {
 
 @SchemaMaker
 infix fun ColumnSchema.and(constraint: Constraint): ColumnSchema = constraints(constraint)
+
+@SchemaMaker
+infix fun ColumnSchema.constraints(constraintList: List<Constraint>): ColumnSchema {
+    constraints += constraintList
+    return this
+}
+
+@SchemaMaker  
+infix fun Constraint.and(constraint: Constraint): List<Constraint> = listOf(this, constraint)
+
+@SchemaMaker
+infix fun List<Constraint>.and(constraint: Constraint): List<Constraint> = this + constraint
 
 @SchemaMaker
 infix fun ColumnSchema.foreignKey(value: String): ColumnSchema {

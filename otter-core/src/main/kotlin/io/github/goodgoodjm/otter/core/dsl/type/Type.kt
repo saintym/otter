@@ -106,3 +106,8 @@ object TypeUtils {
     val ID get() = INT constraints Constraint.PRIMARY and Constraint.AUTO_INCREMENT
     val LONG_ID get() = LONG constraints Constraint.PRIMARY and Constraint.AUTO_INCREMENT
 }
+
+val INT = Type.INT
+fun VARCHAR(length: Int = 255, collate: String? = null) = Type.VARCHAR(length, collate)
+fun TEXT(collate: String? = null, eagerLoading: Boolean = false) = Type.TEXT(collate, eagerLoading)
+fun DECIMAL(precision: Int, scale: Int) = Type.DECIMAL(precision, scale)
