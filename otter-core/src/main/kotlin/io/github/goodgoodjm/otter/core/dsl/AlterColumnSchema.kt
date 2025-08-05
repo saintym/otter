@@ -1,8 +1,6 @@
 package io.github.goodgoodjm.otter.core.dsl
 
-import java.util.*
-
-class AlterColumnSchema {
+class AlterColumnSchema : SchemaContext {
     enum class Type {
         NONE, ADD, DROP, MODIFY
     }
@@ -12,16 +10,20 @@ class AlterColumnSchema {
     var name: String = ""
     var type: String = ""
 
-    val constraints: EnumSet<Constraint> get() = _constraints
-    private val _constraints = EnumSet.noneOf(Constraint::class.java)
+    val constraints: List<Constraint> get() = _constraints
+    private val _constraints = mutableListOf<Constraint>()
 
     fun setConstraint(vararg constraints: Constraint) {
-        val items = constraints.filter { it !== Constraint.NONE }.toList()
+        val items = constraints.filter { it !is Constraint.NONE }.toList()
         _constraints.clear()
         _constraints.addAll(items)
     }
 
+    override fun resolve(): List<String> {
+        return emptyList()
+    }
+
     override fun toString(): String {
-        return "AlterColumnSchema(alterType=$alterType, table='$table', name='$name', type='$type', _constraints=$_constraints)"
+        return "AlterColumnSchema(alterType=$alterType, table='$table', name='$name', type='$type', constraints=$_constraints)"
     }
 }
