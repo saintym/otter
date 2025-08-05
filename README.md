@@ -8,7 +8,7 @@ DB Migration Tool for Kotlin. Inspired by [harmonica](https://github.com/KenjiOh
 
 - [x] New Syntax
 - [x] Type Support
-- [ ] Alter
+- [x] Alter
 - [ ] Sequence
 - [ ] Create user guide
 - [ ] Down
