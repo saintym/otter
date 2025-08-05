@@ -5,6 +5,8 @@ import io.github.goodgoodjm.otter.core.dsl.SchemaContext
 import io.github.goodgoodjm.otter.core.dsl.SchemaMaker
 import io.github.goodgoodjm.otter.core.dsl.createtable.CreateTableContext
 import io.github.goodgoodjm.otter.core.dsl.createtable.TableSchema
+import io.github.goodgoodjm.otter.core.dsl.altertable.AlterTableContext
+import io.github.goodgoodjm.otter.core.dsl.altertable.AlterTableSchema
 import org.jetbrains.exposed.sql.Table
 
 abstract class Migration {
@@ -42,6 +44,13 @@ abstract class Migration {
         _contexts.add(object : SchemaContext {
             override fun resolve(): List<String> = listOf(sql)
         })
+    }
+
+    @SchemaMaker
+    fun alterTable(name: String, block: AlterTableSchema.() -> Unit) {
+        val tableSchema = AlterTableSchema(name).apply(block)
+        val context = AlterTableContext(tableSchema)
+        _contexts.add(context)
     }
 
     fun addColumn(block: AlterColumnSchema.() -> Unit) = alterColumn(AlterColumnSchema.Type.ADD, block)
