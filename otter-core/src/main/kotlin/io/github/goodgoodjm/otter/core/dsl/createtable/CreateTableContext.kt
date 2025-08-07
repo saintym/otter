@@ -30,14 +30,26 @@ class DynamicPrimaryKeyTable(name: String) : Table(name) {
             PrimaryKey(primaryKeys)
         }
 
+    private val columnConverter = ColumnTypeConverterFactory.createConverter()
 
     private fun addColumn(name: String, columnSchema: ColumnSchema) {
-        var column = registerColumn<Comparable<Any>>(name, columnSchema.columnType)
+        // DB 벤더별 컬럼 타입 변환
+        val actualColumnType = columnConverter.convertAutoIncrement(
+            columnSchema.columnType, 
+            columnSchema.constraints
+        )
+        
+        var column = registerColumn<Comparable<Any>>(name, actualColumnType)
         columnSchema.constraints.forEach { constraint ->
             when (constraint) {
                 is Constraint.PRIMARY, is Constraint.NOT_NULL -> null
                 is Constraint.NULLABLE -> column.columnType.nullable = true
-                is Constraint.AUTO_INCREMENT -> column = column.autoIncrement()
+                is Constraint.AUTO_INCREMENT -> {
+                    // 컨버터에서 이미 처리된 경우(예: PostgreSQL SERIAL) skip
+                    if (actualColumnType == columnSchema.columnType) {
+                        column = column.autoIncrement()
+                    }
+                }
                 is Constraint.UNIQUE -> column = column.uniqueIndex()
                 is Constraint.DEFAULT -> {}
                 is Constraint.CHECK -> {}
@@ -61,5 +73,9 @@ class DynamicPrimaryKeyTable(name: String) : Table(name) {
         }
     }
 
-    fun resolve(): List<String> = ddl + indices.flatMap { it.createStatement() }
+    fun resolve(): List<String> {
+        val statements = ddl + indices.flatMap { it.createStatement() }
+        logger.debug("Generated CREATE TABLE SQL for '${this.tableName}': $statements")
+        return statements
+    }
 }

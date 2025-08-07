@@ -97,3 +97,5 @@ Otter는 Kotlin 기반의 데이터베이스 마이그레이션 도구입니다.
 3. 내용 및 설명은 모두 한글로
 4. 이모지 금지
 5. PR 생성 시 작업 내용에 맞는 브랜치명 사용 (예: feature/alter-table, fix/legacy-code-removal)
+6. PR 생성 시, Assignee 는 saintym 으로 작성한다.
+7. PR code review 진행 시, Assignee 가 saintym 이라면 comment 로 작성하고 "PR 승인"이 아니라 "Merge" 를 진행한다.

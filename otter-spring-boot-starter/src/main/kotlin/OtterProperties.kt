@@ -13,5 +13,9 @@ data class OtterProperties(
     val username: String = "",
     val password: String = "",
     val showSql: Boolean = false,
-    val version: String = ""
-)
+    val version: String = "",
+    val testMode: Boolean = false
+) {
+    @Deprecated("Use testMode instead", ReplaceWith("testMode"))
+    val disableLock: Boolean get() = testMode
+}

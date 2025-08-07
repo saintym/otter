@@ -1,21 +1,20 @@
 import io.github.goodgoodjm.otter.core.Migration
 import io.github.goodgoodjm.otter.core.dsl.*
-import io.github.goodgoodjm.otter.core.dsl.createtable.and
-import io.github.goodgoodjm.otter.core.dsl.createtable.constraints
+import io.github.goodgoodjm.otter.core.dsl.createtable.*
 import io.github.goodgoodjm.otter.core.dsl.type.*
+import io.github.goodgoodjm.otter.core.dsl.Constraint
 
 object : Migration() {
-    override val comment = "Create Test"
-
+    override val comment = "Empty down migration"
+    
     override fun up() {
-        createTable("test") {
+        createTable("users") {
             "id" - INT constraints Constraint.PRIMARY and Constraint.AUTO_INCREMENT
-            "name" - VARCHAR(255) constraints Constraint.UNIQUE
-            "age" - INT
+            "name" - VARCHAR(100)
         }
     }
-
+    
     override fun down() {
-        dropTable("test")
+        // 비어있음
     }
 }

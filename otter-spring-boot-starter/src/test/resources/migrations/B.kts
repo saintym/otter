@@ -1,33 +1,30 @@
 import io.github.goodgoodjm.otter.core.Migration
-import io.github.goodgoodjm.otter.core.dsl.Constraint
-import io.github.goodgoodjm.otter.core.dsl.Constraint.AUTO_INCREMENT
-import io.github.goodgoodjm.otter.core.dsl.Constraint.PRIMARY
+import io.github.goodgoodjm.otter.core.dsl.*
 import io.github.goodgoodjm.otter.core.dsl.createtable.and
 import io.github.goodgoodjm.otter.core.dsl.createtable.constraints
 import io.github.goodgoodjm.otter.core.dsl.createtable.foreignKey
-import io.github.goodgoodjm.otter.core.dsl.type.Type
-import io.github.goodgoodjm.otter.core.dsl.type.Type.INT
+import io.github.goodgoodjm.otter.core.dsl.type.*
 
 object : Migration() {
-    override val comment = "Create person and user"
+    override val comment = "Create customers and products"
 
     override fun up() {
-
-        createTable("person") {
-            "id" - INT constraints PRIMARY and AUTO_INCREMENT
-            "name" - Type.VARCHAR constraints Constraint.UNIQUE
-            "age" - INT
+        createTable("customers") {
+            "id" - INT constraints Constraint.PRIMARY and Constraint.AUTO_INCREMENT
+            "name" - VARCHAR(255) constraints Constraint.UNIQUE
+            "email" - VARCHAR(255)
         }
 
-        createTable("user") {
-            "id" - INT constraints PRIMARY and AUTO_INCREMENT
-            "person_id" - INT foreignKey "person(id)"
+        createTable("products") {
+            "id" - INT constraints Constraint.PRIMARY and Constraint.AUTO_INCREMENT
+            "name" - VARCHAR(255) constraints Constraint.NOT_NULL
+            "customer_id" - INT foreignKey "customers(id)"
         }
     }
 
     override fun down() {
-        dropTable("person")
-        dropTable("user")
+        dropTable("products")
+        dropTable("customers")
     }
 }
 

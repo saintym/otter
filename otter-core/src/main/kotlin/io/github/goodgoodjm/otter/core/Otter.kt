@@ -1,5 +1,8 @@
 package io.github.goodgoodjm.otter.core
 
+import io.github.goodgoodjm.otter.core.Constants.Lock.DEFAULT_TIMEOUT_SECONDS
+import io.github.goodgoodjm.otter.core.Constants.Lock.RETRY_INTERVAL_MILLIS
+import io.github.goodgoodjm.otter.core.process.DownProcess
 import io.github.goodgoodjm.otter.core.resourceresolver.ResourceResolver
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -15,7 +18,7 @@ import java.net.InetAddress
 import javax.script.ScriptEngineManager
 
 class Otter(
-    private val config: OtterConfig,
+    private val config: OtterConfig
 ) {
     companion object : Logger {
         fun from(config: OtterConfig) = Otter(config)
@@ -30,7 +33,7 @@ class Otter(
             config.password
         )
 
-        transaction {
+        transaction(database) {
             block()
         }
 
@@ -39,7 +42,17 @@ class Otter(
     }
 
     fun up() = migrationScope {
-        MigrationProcess(this, config.migrationPath, config.showSql, config.version).exec()
+        MigrationProcess(this, config.migrationPath, config.showSql, config.version, config.testMode).exec()
+    }
+    
+    fun down(steps: Int = 1, force: Boolean = false) = migrationScope {
+        DownProcess(
+            transaction = this,
+            migrationPath = config.migrationPath,
+            steps = steps,
+            showSql = config.showSql,
+            force = force
+        ).exec()
     }
 }
 
@@ -62,6 +75,7 @@ class MigrationProcess(
     private val migrationPath: String,
     private val showSql: Boolean,
     private val version: String,
+    private val testMode: Boolean = false
 ) {
     private var hasLock: Boolean = false
 
@@ -69,8 +83,13 @@ class MigrationProcess(
 
     fun exec() {
         createMigrationTable()
-        lock {
+        if (testMode) {
+            logger.debug("Running in test mode - skipping migration lock")
             migration()
+        } else {
+            lock {
+                migration()
+            }
         }
     }
 
@@ -109,14 +128,14 @@ class MigrationProcess(
     private fun waitForLock() {
         var hasLock = false
         runBlocking {
-            val loopLimit = 60
+            val loopLimit = DEFAULT_TIMEOUT_SECONDS.toInt()
             var count = 0
             while (!hasLock && count < loopLimit) {
                 count++
                 hasLock = acquireLock()
                 if (!hasLock) {
                     logger.info("Waiting for lock...(${count})")
-                    delay(1_000)
+                    delay(RETRY_INTERVAL_MILLIS)
                 }
             }
         }
@@ -159,25 +178,32 @@ class MigrationProcess(
             logger.debug("There is no applied migrations. All migrations would be applied.")
         }
 
+        logger.debug("Version: '$version', Latest applied: '$latestFilename'")
+
         val migrations = loadMigrations()
         migrations.forEach { (name, migration) ->
+            logger.debug("Checking migration: $name")
+            val shouldRollback = shouldRollback(name, latestFilename)
+            val shouldMigrate = shouldMigrate(name, latestFilename)
+            logger.debug("  shouldRollback: $shouldRollback, shouldMigrate: $shouldMigrate")
+            
             when {
-                shouldRollback(name, latestFilename) -> handleRollback(name, migration)
-                shouldMigrate(name, latestFilename) -> handleMigration(name, migration)
+                shouldRollback -> handleRollback(name, migration)
+                shouldMigrate -> handleMigration(name, migration)
                 else -> logger.debug("$name is already migrated or isn't included in the target version, will be skipped.")
             }
         }
     }
 
     private fun shouldRollback(name: String, latestFilename: String): Boolean {
-        if(version.isNullOrEmpty())
-            return name <= latestFilename
+        if(version.isEmpty())
+            return false  // 버전이 지정되지 않으면 롤백하지 않음
         return name > version && name <= latestFilename
     }
 
     private fun shouldMigrate(name: String, latestFilename: String): Boolean {
-        if(version.isNullOrEmpty())
-            return name > latestFilename
+        if(version.isEmpty())
+            return name > latestFilename  // 버전이 지정되지 않으면 모든 새 마이그레이션 실행
         return name <= version && name > latestFilename
     }
 
@@ -195,9 +221,13 @@ class MigrationProcess(
     }
 
     private fun handleMigration(name: String, migration: Migration) {
+        logger.debug("Executing migration: $name")
         migration.up()
+        logger.debug("Migration contexts count: ${migration.contexts.size}")
+        
         migration.contexts.flatMap { it.resolve() }.forEach {
             if (showSql) logger.info(it)
+            logger.debug("Executing SQL: $it")
             transaction.exec(it)
         }
         transaction.commit()
@@ -206,6 +236,7 @@ class MigrationProcess(
             it[filename] = name
             it[comment] = migration.comment
         }
+        logger.debug("Migration $name completed")
     }
 
     private fun loadMigrations(): Map<String, Migration> = ResourceResolver().resolveEntries(migrationPath)

@@ -27,6 +27,7 @@ dependencies {
     testImplementation(kotlin("script-runtime"))
 
     testImplementation("com.h2database:h2")
+    testImplementation("org.postgresql:postgresql")
     testImplementation("ch.qos.logback:logback-classic:1.2.6")
 }
 

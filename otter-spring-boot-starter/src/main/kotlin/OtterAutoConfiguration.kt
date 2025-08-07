@@ -29,7 +29,8 @@ open class OtterAutoConfiguration(
             user = properties.username,
             password = properties.password,
             showSql = properties.showSql,
-            version = properties.version
+            version = properties.version,
+            testMode = properties.testMode
         )
 
         @Bean
