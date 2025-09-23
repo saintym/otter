@@ -51,3 +51,9 @@ class MigrationValidationException(message: String, errors: List<String> = empty
         }
     }
 }
+
+/**
+ * 마이그레이션 스크립트 실행 관련 예외
+ */
+class MigrationScriptException(message: String, cause: Throwable? = null)
+    : OtterException("Migration script error: $message", cause)

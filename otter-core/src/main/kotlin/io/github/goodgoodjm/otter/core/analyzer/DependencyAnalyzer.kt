@@ -54,13 +54,16 @@ class DependencyAnalyzer {
                 is AlterTableContext -> {
                     val tableName = context.tableSchema.name
                     val refs = extractAlterReferences(context)
-                    dependencies[tableName] = dependencies[tableName]?.copy(
-                        dependsOn = dependencies[tableName]!!.dependsOn + refs
-                    ) ?: TableDependency(
-                        tableName = tableName,
-                        dependsOn = refs,
-                        operation = OperationType.ALTER
-                    )
+                    val existing = dependencies[tableName]
+                    dependencies[tableName] = if (existing != null) {
+                        existing.copy(dependsOn = existing.dependsOn + refs)
+                    } else {
+                        TableDependency(
+                            tableName = tableName,
+                            dependsOn = refs,
+                            operation = OperationType.ALTER
+                        )
+                    }
                 }
                 is DropTableContext -> {
                     val tableName = context.tableName

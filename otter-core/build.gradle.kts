@@ -15,6 +15,9 @@ dependencies {
     implementation(kotlin("scripting-jsr223"))
     implementation("org.slf4j", "slf4j-api", "1.7.30")
 
+    // Connection pooling (required for adapters)
+    implementation("com.zaxxer:HikariCP:5.1.0")
+
     implementation(platform("org.jetbrains.exposed:exposed-bom:0.38.2"))
     implementation("org.jetbrains.exposed", "exposed-core")
     implementation("org.jetbrains.exposed", "exposed-dao")

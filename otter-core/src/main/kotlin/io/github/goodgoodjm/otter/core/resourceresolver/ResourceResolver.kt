@@ -9,7 +9,8 @@ class ResourceResolver {
     fun resolveEntries(path: String): List<String> {
         val url = classLoader.getResource(path) ?: throw ResourceLoadException("Resource($path) does not exist.")
         return when (url.protocol) {
-            "file" -> File(url.file).list()!!.map { "$path/$it" }
+            "file" -> File(url.file).list()?.map { "$path/$it" } 
+                ?: throw ResourceLoadException("Failed to list files in directory: $path")
             "jar" -> (url.openConnection() as JarURLConnection).jarFile.use { jar ->
                 jar.entries().asSequence()
                     .filter { it.name.startsWith(path) && it.name.endsWith(".kts") }

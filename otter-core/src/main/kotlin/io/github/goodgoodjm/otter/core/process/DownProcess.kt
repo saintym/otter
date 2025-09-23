@@ -5,18 +5,22 @@ import io.github.goodgoodjm.otter.core.Migration
 import io.github.goodgoodjm.otter.core.MigrationTable
 import io.github.goodgoodjm.otter.core.analyzer.DependencyAnalyzer
 import io.github.goodgoodjm.otter.core.resourceresolver.ResourceResolver
+import io.github.goodgoodjm.otter.core.security.SecureMigrationScriptEngine
+import io.github.goodgoodjm.otter.core.transaction.TransactionHelper
+import io.github.goodgoodjm.otter.core.io.UserInputHandler
+import io.github.goodgoodjm.otter.core.io.ConsoleUserInputHandler
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.Transaction
 import java.io.Reader
-import javax.script.ScriptEngineManager
 
 class DownProcess(
     private val transaction: Transaction,
     private val migrationPath: String,
     private val steps: Int = 1,
     private val showSql: Boolean = false,
-    private val force: Boolean = false
+    private val force: Boolean = false,
+    private val userInputHandler: UserInputHandler = ConsoleUserInputHandler()
 ) {
     companion object : Logger
     
@@ -89,28 +93,29 @@ class DownProcess(
         return evalMigration(resource.openStream().reader())
     }
     
+    private val scriptEngine = SecureMigrationScriptEngine()
+    
     private fun evalMigration(reader: Reader): Migration {
-        val engine = ScriptEngineManager().getEngineByExtension("kts")
-        return engine.eval(reader) as Migration
+        return scriptEngine.evalMigration(reader)
     }
     
     private fun confirmRollback(migrations: List<Pair<String, Migration>>) {
-        logger.warn("⚠️  WARNING: You are about to rollback ${migrations.size} migration(s)")
-        logger.warn("This may result in data loss!")
-        logger.warn("")
-        logger.warn("Migrations to be rolled back:")
+        userInputHandler.showMessage("⚠️  WARNING: You are about to rollback ${migrations.size} migration(s)")
+        userInputHandler.showMessage("This may result in data loss!")
+        userInputHandler.showMessage("")
+        userInputHandler.showMessage("Migrations to be rolled back:")
         
         migrations.forEach { (filename, migration) ->
-            logger.warn("  - $filename: ${migration.comment}")
+            userInputHandler.showMessage("  - $filename: ${migration.comment}")
             if (migration.contexts.isEmpty()) {
-                logger.warn("    ⚠️  Empty down() implementation - nothing will be rolled back")
+                userInputHandler.showMessage("    ⚠️  Empty down() implementation - nothing will be rolled back")
             }
         }
         
-        logger.warn("")
-        print("Do you want to continue? (yes/no): ")
+        userInputHandler.showMessage("")
+        val response = userInputHandler.readInput("Do you want to continue? (yes/no): ")
+            ?.trim()?.lowercase()
         
-        val response = readLine()?.trim()?.lowercase()
         if (response != "yes" && response != "y") {
             throw RollbackCancelledException("Rollback cancelled by user")
         }
@@ -119,7 +124,7 @@ class DownProcess(
     private fun executeRollback(filename: String, migration: Migration) {
         logger.info("Rolling back: $filename")
         
-        try {
+        val result = TransactionHelper.executeWithSavepoint(transaction, "down_$filename") {
             migration.down()
             
             if (migration.contexts.isEmpty()) {
@@ -134,21 +139,24 @@ class DownProcess(
                 sortedContexts.forEach { context ->
                     context.resolve().forEach { sql ->
                         if (showSql) logger.info("  └─ $sql")
-                        transaction.exec(sql)
+                        exec(sql)
                     }
                 }
             }
             
-            transaction.commit()
-            
             // 마이그레이션 테이블에서 제거
             MigrationTable.deleteWhere { MigrationTable.filename eq filename }
-            
-            logger.info("  └─ ✅ Rolled back successfully")
-        } catch (e: Exception) {
-            logger.error("  └─ ❌ Rollback failed: ${e.message}")
-            throw e
         }
+        
+        result.fold(
+            onSuccess = {
+                logger.info("  └─ ✅ Rolled back successfully")
+            },
+            onFailure = { e ->
+                logger.error("  └─ ❌ Rollback failed: ${e.message}")
+                throw RollbackException("Rollback failed at $filename", e)
+            }
+        )
     }
 }
 
