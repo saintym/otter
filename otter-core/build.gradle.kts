@@ -7,7 +7,6 @@ repositories {
     mavenCentral()
 }
 
-val exposedVersion: String by project
 dependencies {
     implementation(kotlin("stdlib"))
     implementation(kotlin("stdlib-jdk8"))
@@ -15,14 +14,15 @@ dependencies {
     implementation(kotlin("scripting-jsr223"))
     implementation("org.slf4j", "slf4j-api", "1.7.30")
 
+    // Coroutines support (for async operations)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+
     // Connection pooling (required for adapters)
     implementation("com.zaxxer:HikariCP:5.1.0")
 
-    implementation(platform("org.jetbrains.exposed:exposed-bom:0.38.2"))
-    implementation("org.jetbrains.exposed", "exposed-core")
-    implementation("org.jetbrains.exposed", "exposed-dao")
-    implementation("org.jetbrains.exposed", "exposed-jdbc")
-    implementation("org.jetbrains.exposed", "exposed-java-time")
+    // JDBC driver support (for database adapters)
+    // Note: Exposed dependencies have been completely removed as part of the refactoring
+    // The project now uses a custom DatabaseAdapter pattern instead
 
     testImplementation(kotlin("test"))
     testImplementation(kotlin("test-junit5"))

@@ -1,113 +1,225 @@
 package io.github.goodgoodjm.otter.core.dsl.type
 
 import io.github.goodgoodjm.otter.core.dsl.Constraint
-import io.github.goodgoodjm.otter.core.dsl.createtable.ColumnSchema
-import io.github.goodgoodjm.otter.core.dsl.createtable.and
-import io.github.goodgoodjm.otter.core.dsl.createtable.constraints
-import io.github.goodgoodjm.otter.core.dsl.type.Type.INT
-import io.github.goodgoodjm.otter.core.dsl.type.Type.LONG
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.javatime.*
 
-class CustomColumnType(val type: String) : ColumnType() {
-    override fun sqlType(): String = type
+/**
+ * Otter Type System - 불변 타입 시스템
+ *
+ * 기존 시스템의 문제점:
+ * 1. Mutable ColumnSchema
+ * 2. 싱글톤 공유로 인한 상태 오염
+ * 3. getter 남발로 인한 메모리 낭비
+ *
+ * 새로운 접근:
+ * - 모든 타입은 불변
+ * - Fluent API로 체이닝
+ * - Copy-on-write 패턴
+ */
+
+/**
+ * 불변 컬럼 정의 (ColumnSchema 별칭 추가)
+ */
+typealias ColumnSchema = Column
+
+data class Column(
+    val type: ColumnType,
+    val constraints: Set<Constraint> = emptySet(),
+    val defaultValue: DefaultValue? = null,
+    val references: ForeignKeyReference? = null
+) {
+    // Fluent API methods
+    fun notNull() = withConstraint(Constraint.NOT_NULL)
+    fun unique() = withConstraint(Constraint.UNIQUE)
+    fun primaryKey() = withConstraint(Constraint.PRIMARY)
+    fun autoIncrement() = withConstraint(Constraint.AUTO_INCREMENT)
+
+    fun default(value: String) = copy(defaultValue = DefaultValue.Literal(value))
+    fun defaultCurrentTimestamp() = copy(defaultValue = DefaultValue.CurrentTimestamp)
+    fun defaultNull() = copy(defaultValue = DefaultValue.Null)
+
+    fun references(table: String, column: String = "id") =
+        copy(references = ForeignKeyReference(table, column))
+
+    fun withConstraint(constraint: Constraint) =
+        copy(constraints = constraints + constraint)
+
+    fun withConstraints(vararg newConstraints: Constraint) =
+        copy(constraints = constraints + newConstraints.toSet())
+
+    // DSL 연산자
+    operator fun plus(constraint: Constraint) = withConstraint(constraint)
 }
 
+/**
+ * 컬럼 타입 (sealed class로 타입 안전성 보장)
+ */
+sealed class ColumnType {
+    // 숫자 타입
+    object TinyInt : ColumnType()
+    object SmallInt : ColumnType()
+    object Integer : ColumnType()
+    object BigInt : ColumnType()
+    data class Decimal(val precision: Int, val scale: Int) : ColumnType()
+    object Float : ColumnType()
+    object Double : ColumnType()
+
+    // 문자열 타입
+    data class Char(val length: Int) : ColumnType()
+    data class Varchar(val length: Int) : ColumnType()
+    object Text : ColumnType()
+
+    // 날짜/시간 타입
+    object Date : ColumnType()
+    object Time : ColumnType()
+    object DateTime : ColumnType()
+    object Timestamp : ColumnType()
+
+    // 기타 타입
+    object Boolean : ColumnType()
+    object Uuid : ColumnType()
+    object Json : ColumnType()
+    object Blob : ColumnType()
+    data class Custom(val sqlType: String) : ColumnType()
+}
+
+/**
+ * 기본값 타입
+ */
+sealed class DefaultValue {
+    object Null : DefaultValue()
+    data class Literal(val value: String) : DefaultValue()
+    object CurrentTimestamp : DefaultValue()
+    object CurrentDate : DefaultValue()
+    object CurrentTime : DefaultValue()
+    data class Expression(val sql: String) : DefaultValue()
+}
+
+/**
+ * 외래키 참조
+ */
+data class ForeignKeyReference(
+    val table: String,
+    val column: String,
+    val onDelete: ReferentialAction = ReferentialAction.RESTRICT,
+    val onUpdate: ReferentialAction = ReferentialAction.RESTRICT
+)
+
+enum class ReferentialAction {
+    CASCADE, RESTRICT, SET_NULL, SET_DEFAULT, NO_ACTION
+}
+
+/**
+ * Type Factory - 타입 생성 함수들
+ *
+ * 사용 예:
+ * val column = integer().notNull().primaryKey().autoIncrement()
+ * val email = varchar(255).notNull().unique()
+ */
+object Types {
+    // 숫자 타입 팩토리
+    fun tinyInt() = Column(ColumnType.TinyInt)
+    fun smallInt() = Column(ColumnType.SmallInt)
+    fun integer() = Column(ColumnType.Integer)
+    fun bigInt() = Column(ColumnType.BigInt)
+    fun decimal(precision: Int, scale: Int) = Column(ColumnType.Decimal(precision, scale))
+    fun float() = Column(ColumnType.Float)
+    fun double() = Column(ColumnType.Double)
+
+    // 문자열 타입 팩토리
+    fun char(length: Int = 1) = Column(ColumnType.Char(length))
+    fun varchar(length: Int = 255) = Column(ColumnType.Varchar(length))
+    fun text() = Column(ColumnType.Text)
+
+    // 날짜/시간 타입 팩토리
+    fun date() = Column(ColumnType.Date)
+    fun time() = Column(ColumnType.Time)
+    fun datetime() = Column(ColumnType.DateTime)
+    fun timestamp() = Column(ColumnType.Timestamp)
+
+    // 기타 타입 팩토리
+    fun boolean() = Column(ColumnType.Boolean)
+    fun uuid() = Column(ColumnType.Uuid)
+    fun json() = Column(ColumnType.Json)
+    fun blob() = Column(ColumnType.Blob)
+    fun custom(sqlType: String) = Column(ColumnType.Custom(sqlType))
+
+    // 특수 타입 (PostgreSQL SERIAL 등)
+    fun serial() = integer().primaryKey().autoIncrement()
+    fun bigSerial() = bigInt().primaryKey().autoIncrement()
+}
+
+/**
+ * 전역 상수 - 기존 코드 호환성을 위해
+ */
 object Type {
-    fun custom(type: String): ColumnSchema = ColumnSchema(type)
+    // 숫자 타입
+    val TINYINT get() = Types.tinyInt()
+    val SMALLINT get() = Types.smallInt()
+    val INT get() = Types.integer()
+    val INTEGER get() = Types.integer()
+    val BIGINT get() = Types.bigInt()
+    val FLOAT get() = Types.float()
+    val DOUBLE get() = Types.double()
 
-    fun byte(): ColumnSchema = ColumnSchema(ByteColumnType())
-    val BYTE get() = byte()
+    // 문자열 타입
+    val TEXT get() = Types.text()
+    fun VARCHAR(length: Int = 255) = Types.varchar(length)
+    fun CHAR(length: Int = 1) = Types.char(length)
+    fun DECIMAL(precision: Int, scale: Int) = Types.decimal(precision, scale)
 
-    @ExperimentalUnsignedTypes
-    fun ubyte(): ColumnSchema = ColumnSchema(UByteColumnType())
-    val UBYTE get() = ubyte()
+    // 날짜/시간 타입
+    val DATE get() = Types.date()
+    val TIME get() = Types.time()
+    val DATETIME get() = Types.datetime()
+    val TIMESTAMP get() = Types.timestamp()
 
-    fun short(): ColumnSchema = ColumnSchema(ShortColumnType())
-    val SHORT get() = short()
+    // 기타 타입
+    val BOOLEAN get() = Types.boolean()
+    val UUID get() = Types.uuid()
+    val JSON get() = Types.json()
+    val JSONB get() = Types.json()
+    val BLOB get() = Types.blob()
 
-    @ExperimentalUnsignedTypes
-    fun ushort(): ColumnSchema = ColumnSchema(UShortColumnType())
-    val USHORT get() = ushort()
-
-    fun int(): ColumnSchema = ColumnSchema(IntegerColumnType())
-    val INT get() = int()
-
-    @ExperimentalUnsignedTypes
-    fun uint(): ColumnSchema = ColumnSchema(UIntegerColumnType())
-    val UINT get() = uint()
-
-    fun long(): ColumnSchema = ColumnSchema(LongColumnType())
-    val LONG get() = long()
-
-    @ExperimentalUnsignedTypes
-    fun ulong(): ColumnSchema = ColumnSchema(ULongColumnType())
-    val ULONG get() = ulong()
-
-    fun float(): ColumnSchema = ColumnSchema(FloatColumnType())
-    val FLOAT get() = float()
-
-    fun double(): ColumnSchema = ColumnSchema(DoubleColumnType())
-    val DOUBLE get() = double()
-
-    fun decimal(precision: Int, scale: Int): ColumnSchema = ColumnSchema(DecimalColumnType(precision, scale))
-    fun DECIMAL(precision: Int, scale: Int) = decimal(precision, scale)
-
-    fun char(): ColumnSchema = ColumnSchema(CharacterColumnType())
-    val CHAR get() = char()
-
-    fun char(length: Int, collate: String? = null): ColumnSchema =
-        ColumnSchema(CharColumnType(length, collate))
-
-    fun CHAR(length: Int, collate: String? = null): ColumnSchema = char(length, collate)
-
-    fun varchar(length: Int = 255, collate: String? = null): ColumnSchema =
-        ColumnSchema(VarCharColumnType(length, collate))
-
-    val VARCHAR get() = varchar()
-    fun VARCHAR(length: Int = 255, collate: String? = null) = varchar(length, collate)
-
-    fun text(collate: String? = null, eagerLoading: Boolean = false): ColumnSchema =
-        ColumnSchema(TextColumnType(collate, eagerLoading))
-
-    fun TEXT(collate: String? = null, eagerLoading: Boolean = false) = text(collate, eagerLoading)
-
-    fun binary(): ColumnSchema = ColumnSchema(BasicBinaryColumnType())
-    val BINARY get() = binary()
-
-    fun binary(length: Int): ColumnSchema = ColumnSchema(BinaryColumnType(length))
-
-    fun blob(): ColumnSchema = ColumnSchema(BlobColumnType())
-    val BLOB get() = blob()
-
-    fun uuid(): ColumnSchema = ColumnSchema(UUIDColumnType())
-    val UUID get() = uuid()
-
-    fun bool(): ColumnSchema = ColumnSchema(BooleanColumnType())
-    val BOOL get() = bool()
-
-    fun date(): ColumnSchema = ColumnSchema(JavaLocalDateColumnType())
-    val DATE get() = date()
-
-    fun datetime(): ColumnSchema = ColumnSchema(JavaLocalDateTimeColumnType())
-    val DATETIME get() = datetime()
-
-    fun time(): ColumnSchema = ColumnSchema(JavaLocalTimeColumnType())
-    val TIME get() = time()
-
-    fun timestamp(): ColumnSchema = ColumnSchema(JavaInstantColumnType())
-    val TIMESTAMP get() = timestamp()
-
-    fun duration(): ColumnSchema = ColumnSchema(JavaDurationColumnType())
-    val DURATION get() = duration()
+    // 특수 타입
+    val SERIAL get() = Types.serial()
+    val BIGSERIAL get() = Types.bigSerial()
 }
 
-object TypeUtils {
-    val ID get() = INT constraints Constraint.PRIMARY and Constraint.AUTO_INCREMENT
-    val LONG_ID get() = LONG constraints Constraint.PRIMARY and Constraint.AUTO_INCREMENT
-}
-
+// 전역 변수로 직접 사용 가능
+val TINYINT get() = Type.TINYINT
+val SMALLINT get() = Type.SMALLINT
 val INT get() = Type.INT
-fun VARCHAR(length: Int = 255, collate: String? = null) = Type.VARCHAR(length, collate)
-fun TEXT(collate: String? = null, eagerLoading: Boolean = false) = Type.TEXT(collate, eagerLoading)
+val INTEGER get() = Type.INTEGER
+val BIGINT get() = Type.BIGINT
+val FLOAT get() = Type.FLOAT
+val DOUBLE get() = Type.DOUBLE
+val TEXT get() = Type.TEXT
+val DATE get() = Type.DATE
+val TIME get() = Type.TIME
+val DATETIME get() = Type.DATETIME
+val TIMESTAMP get() = Type.TIMESTAMP
+val BOOLEAN get() = Type.BOOLEAN
+val UUID get() = Type.UUID
+val JSON get() = Type.JSON
+val JSONB get() = Type.JSONB
+val BLOB get() = Type.BLOB
+val SERIAL get() = Type.SERIAL
+val BIGSERIAL get() = Type.BIGSERIAL
+
+fun VARCHAR(length: Int = 255) = Type.VARCHAR(length)
+fun CHAR(length: Int = 1) = Type.CHAR(length)
 fun DECIMAL(precision: Int, scale: Int) = Type.DECIMAL(precision, scale)
+
+/**
+ * 사용 예제:
+ *
+ * createTable("users") {
+ *     "id" - serial()
+ *     "email" - varchar(255).notNull().unique()
+ *     "name" - varchar(100)
+ *     "bio" - text().defaultNull()
+ *     "created_at" - timestamp().defaultCurrentTimestamp()
+ *     "is_active" - bool().default("true")
+ *     "parent_id" - bigint().references("users", "id")
+ * }
+ */

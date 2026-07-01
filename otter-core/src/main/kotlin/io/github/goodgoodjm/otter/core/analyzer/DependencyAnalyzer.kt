@@ -27,14 +27,9 @@ class DependencyAnalyzer {
         forRollback: Boolean = false
     ): List<SchemaContext> {
         val dependencies = extractDependencies(contexts)
-        val sortedOrder = topologicalSort(dependencies)
-        
-        return if (forRollback) {
-            // 롤백 시 역순으로 정렬
-            sortContextsByOrder(contexts, sortedOrder.reversed())
-        } else {
-            sortContextsByOrder(contexts, sortedOrder)
-        }
+        val sortedOrder = topologicalSort(dependencies, forRollback)
+
+        return sortContextsByOrder(contexts, sortedOrder)
     }
     
     private fun extractDependencies(contexts: List<SchemaContext>): Map<String, TableDependency> {
@@ -43,7 +38,7 @@ class DependencyAnalyzer {
         contexts.forEach { context ->
             when (context) {
                 is CreateTableContext -> {
-                    val tableName = context.tableSchema.name
+                    val tableName = context.tableName
                     val refs = extractTableReferences(context)
                     dependencies[tableName] = TableDependency(
                         tableName = tableName,
@@ -80,68 +75,67 @@ class DependencyAnalyzer {
     }
     
     private fun extractTableReferences(context: CreateTableContext): Set<String> {
-        val tableName = context.tableSchema.name
-        return context.tableSchema.columnSchemaMap.values
-            .mapNotNull { column ->
-                column.foreignKey?.let { fk ->
-                    // "table(column)" -> "table"
-                    val referencedTable = fk.substringBefore("(")
-                    // 자기 참조는 제외
-                    if (referencedTable == tableName) null else referencedTable
-                }
-            }
-            .toSet()
+        return context.getReferencedTables()
     }
     
     private fun extractAlterReferences(context: AlterTableContext): Set<String> {
         return context.tableSchema.operations
             .filterIsInstance<AddColumnOperation>()
             .mapNotNull { operation ->
-                operation.columnSchema?.foreignKey?.let { fk ->
-                    fk.substringBefore("(")
+                operation.column?.references?.let { ref ->
+                    ref.table
                 }
             }
             .toSet()
     }
     
-    private fun topologicalSort(dependencies: Map<String, TableDependency>): List<String> {
+    private fun topologicalSort(dependencies: Map<String, TableDependency>, forRollback: Boolean = false): List<String> {
+        // DFS 기반 위상 정렬
         val sorted = mutableListOf<String>()
         val visited = mutableSetOf<String>()
         val visiting = mutableSetOf<String>()
-        
-        fun visit(table: String, path: List<String> = emptyList()) {
+
+        fun visit(table: String) {
+            if (table in visited) return
+
             if (table in visiting) {
-                val cycle = path.dropWhile { it != table } + table
+                // 순환 의존성 감지
+                val cycle = mutableListOf<String>()
+                var current = table
+                cycle.add(current)
+
+                // 간단한 순환 경로 표시
                 throw CircularDependencyException(
-                    "Circular dependency detected: ${cycle.joinToString(" → ")}"
+                    "Circular dependency detected involving table: $table"
                 )
             }
-            
-            if (table in visited) return
-            
+
             visiting.add(table)
-            
-            // 먼저 의존성을 방문
+
+            // 이 테이블이 의존하는 테이블들을 먼저 방문
             dependencies[table]?.dependsOn?.forEach { dep ->
-                // 의존하는 테이블이 dependencies에 존재하는 경우만 방문
-                if (dep in dependencies) {
-                    visit(dep, path + table)
+                // 자기 참조는 순환 의존성이 아님
+                if (dep != table && dependencies.containsKey(dep)) {
+                    visit(dep)
                 }
             }
-            
+
             visiting.remove(table)
             visited.add(table)
             sorted.add(table)
         }
-        
-        // 모든 테이블을 방문
+
+        // 모든 테이블에 대해 DFS 수행
         dependencies.keys.forEach { table ->
-            if (table !in visited) {
-                visit(table)
-            }
+            visit(table)
         }
-        
-        return sorted
+
+        // 롤백 시에는 역순으로
+        return if (forRollback) {
+            sorted.reversed()
+        } else {
+            sorted
+        }
     }
     
     private fun sortContextsByOrder(
@@ -150,7 +144,7 @@ class DependencyAnalyzer {
     ): List<SchemaContext> {
         val contextMap = contexts.associateBy { context ->
             when (context) {
-                is CreateTableContext -> context.tableSchema.name
+                is CreateTableContext -> context.tableName
                 is AlterTableContext -> context.tableSchema.name
                 is DropTableContext -> context.tableName
                 else -> null
@@ -183,7 +177,7 @@ class DependencyAnalyzer {
     
     private fun getContextName(context: SchemaContext): String {
         return when (context) {
-            is CreateTableContext -> "CREATE ${context.tableSchema.name}"
+            is CreateTableContext -> "CREATE ${context.tableName}"
             is AlterTableContext -> "ALTER ${context.tableSchema.name}"
             is DropTableContext -> "DROP ${context.tableName}"
             else -> context.javaClass.simpleName

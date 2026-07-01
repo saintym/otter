@@ -22,9 +22,49 @@ interface DDLProvider {
     fun dropTable(tableName: String, cascade: Boolean = false): String
 
     /**
+     * Generate SQL to add a column to a table
+     */
+    fun alterTableAddColumn(tableName: String, column: ColumnDefinition): String
+
+    /**
+     * Generate SQL to modify a column in a table
+     */
+    fun alterTableModifyColumn(tableName: String, column: ColumnDefinition): String
+
+    /**
+     * Generate SQL to drop a column from a table
+     */
+    fun alterTableDropColumn(tableName: String, columnName: String, cascade: Boolean = false): String
+
+    /**
+     * Generate SQL to rename a column
+     */
+    fun alterTableRenameColumn(tableName: String, oldName: String, newName: String): String
+
+    /**
+     * Generate SQL to add a primary key
+     */
+    fun alterTableAddPrimaryKey(tableName: String, columns: List<String>): String
+
+    /**
+     * Generate SQL to drop a primary key
+     */
+    fun alterTableDropPrimaryKey(tableName: String): String
+
+    /**
+     * Generate SQL to add a foreign key
+     */
+    fun alterTableAddForeignKey(tableName: String, foreignKey: ForeignKeyConstraint): String
+
+    /**
+     * Generate SQL to drop a foreign key
+     */
+    fun alterTableDropForeignKey(tableName: String, constraintName: String): String
+
+    /**
      * Generate SQL to create an index
      */
-    fun createIndex(index: IndexDefinition): String
+    fun createIndex(tableName: String, index: IndexDefinition): String
 
     /**
      * Generate SQL to drop an index
