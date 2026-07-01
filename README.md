@@ -327,7 +327,7 @@ docker run --name otter-postgres \
 
 ### 테스트 현황
 - ✅ **Core 모듈 테스트**: 90/90 성공 (100%)
-- 🐳 **PostgreSQL 어댑터 테스트**: Docker(Testcontainers) 환경 필요
+- ✅ **PostgreSQL 어댑터 테스트**: 36/36 성공 (100%, Docker/Testcontainers 필요)
 - 🐳 **Spring Boot Starter 테스트**: PostgreSQL 및 JDK 11 환경 필요
 
 ## 라이선스
