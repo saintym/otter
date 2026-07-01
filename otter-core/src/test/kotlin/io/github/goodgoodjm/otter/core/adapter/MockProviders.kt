@@ -5,6 +5,7 @@ import io.github.goodgoodjm.otter.core.adapter.ddl.DDLProvider
 import io.github.goodgoodjm.otter.core.adapter.lock.LockInfo
 import io.github.goodgoodjm.otter.core.adapter.lock.LockProvider
 import io.github.goodgoodjm.otter.core.adapter.model.*
+import io.github.goodgoodjm.otter.core.dsl.ForeignKeyDefinition
 import io.github.goodgoodjm.otter.core.adapter.type.DefaultValue
 import io.github.goodgoodjm.otter.core.adapter.type.TypeMapper
 import java.sql.Connection
@@ -106,98 +107,14 @@ class MockSavepoint(val name: String) : Savepoint {
     override fun getSavepointName(): String = name
 }
 
-/**
- * Mock DDLProvider for testing
- */
-class MockDDLProvider : DDLProvider {
-    override fun createTable(table: TableDefinition): List<String> {
-        return listOf("CREATE TABLE ${table.name} (mock)")
-    }
-
-    override fun alterTable(tableName: String, alterations: List<TableAlteration>): List<String> {
-        return alterations.map { "ALTER TABLE $tableName MOCK" }
-    }
-
-    override fun dropTable(tableName: String, cascade: Boolean): String {
-        return "DROP TABLE $tableName" + if (cascade) " CASCADE" else ""
-    }
-
-    override fun createIndex(index: IndexDefinition): String {
-        return "CREATE INDEX ${index.name} ON ${index.tableName}"
-    }
-
-    override fun dropIndex(indexName: String, tableName: String?): String {
-        return "DROP INDEX $indexName"
-    }
-
-    override fun addForeignKey(constraint: ForeignKeyConstraint): String {
-        return "ALTER TABLE ${constraint.tableName} ADD CONSTRAINT ${constraint.name} FOREIGN KEY"
-    }
-
-    override fun dropForeignKey(constraintName: String, tableName: String): String {
-        return "ALTER TABLE $tableName DROP CONSTRAINT $constraintName"
-    }
-
-    override fun tableExists(tableName: String, schema: String?): String {
-        return "SELECT 1 FROM $tableName LIMIT 0"
-    }
-
-    override fun getTableColumns(tableName: String, schema: String?): String {
-        return "SELECT * FROM $tableName WHERE 1=0"
-    }
-
-    override fun renameTable(oldName: String, newName: String): String {
-        return "ALTER TABLE $oldName RENAME TO $newName"
-    }
-
-    override fun addColumnComment(tableName: String, columnName: String, comment: String): String? {
-        return null  // Not supported in mock
-    }
-
-    override fun addTableComment(tableName: String, comment: String): String? {
-        return null  // Not supported in mock
-    }
-}
+// MockDDLProvider는 별도 파일로 이동됨
+// import io.github.goodgoodjm.otter.core.adapter.MockDDLProvider
 
 /**
- * Mock LockProvider for testing
+ * Thread-Safe LockProvider for testing
+ * ConcurrentLockProvider를 직접 사용
  */
-class MockLockProvider : LockProvider {
-    private val locks = mutableMapOf<String, LockInfo>()
-
-    override fun acquireLock(lockId: String, timeout: Duration): Boolean {
-        if (locks.containsKey(lockId)) {
-            return false
-        }
-        locks[lockId] = LockInfo(
-            lockId = lockId,
-            holder = "test",
-            acquiredAt = Instant.now(),
-            expiresAt = null
-        )
-        return true
-    }
-
-    override fun releaseLock(lockId: String): Boolean {
-        return locks.remove(lockId) != null
-    }
-
-    override fun isLocked(lockId: String): Boolean {
-        return locks.containsKey(lockId)
-    }
-
-    override fun getLockInfo(lockId: String): LockInfo? {
-        return locks[lockId]
-    }
-
-    override fun releaseAllLocks() {
-        locks.clear()
-    }
-
-    override fun supportsAdvisoryLocks(): Boolean {
-        return false
-    }
-}
+typealias MockLockProvider = io.github.goodgoodjm.otter.core.adapter.lock.ConcurrentLockProvider
 
 /**
  * Mock TypeMapper for testing

@@ -97,7 +97,7 @@ class DatabaseAdapterTest {
 /**
  * Mock implementation of DatabaseAdapter for testing
  */
-class MockDatabaseAdapter : DatabaseAdapter {
+open class MockDatabaseAdapter : DatabaseAdapter {
     override val name = "MockDB"
     override val version = "1.0"
     

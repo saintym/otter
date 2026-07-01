@@ -55,7 +55,7 @@ class LockProviderTest {
         val info = lockProvider.getLockInfo(lockId)
         assertNotNull(info)
         assertEquals(lockId, info.lockId)
-        assertEquals("test", info.holder)
+        assertEquals(Thread.currentThread().name, info.holder)
         assertNotNull(info.acquiredAt)
     }
 

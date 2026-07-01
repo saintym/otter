@@ -10,7 +10,7 @@ object : Migration() {
     override fun up() {
         createTable("comments") {
             "id" - INT constraints Constraint.PRIMARY and Constraint.AUTO_INCREMENT
-            "content" - TEXT() constraints Constraint.NOT_NULL
+            "content" - TEXT constraints Constraint.NOT_NULL
             "post_id" - INT foreignKey "posts(id)"
         }
     }
