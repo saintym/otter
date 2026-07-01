@@ -34,9 +34,9 @@ class TestDatabaseAdapter : DatabaseAdapter {
 
         dataSource = HikariDataSource(hikariConfig)
         connectionProvider = H2ConnectionProvider(dataSource as HikariDataSource)
-        ddlProvider = MockDDLProvider()
+        ddlProvider = H2DDLProvider()
         lockProvider = MockLockProvider()
-        typeMapper = MockTypeMapper()
+        typeMapper = H2TypeMapper()
     }
 
     override fun getConnectionProvider(): ConnectionProvider = connectionProvider

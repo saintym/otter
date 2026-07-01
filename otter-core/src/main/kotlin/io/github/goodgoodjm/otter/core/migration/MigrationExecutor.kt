@@ -32,11 +32,30 @@ class MigrationExecutor(
         // 새로운 컨텍스트 패턴 사용
         MigrationContext.runInContext(adapter, context, config) {
             migrationObj.up()
+            applyContexts(migrationObj, context)
 
             if (config.showSql) {
                 logger.info("Migration ${migration.name} executed successfully")
             }
         }
+    }
+
+    /**
+     * DSL로 수집된 스키마 컨텍스트를 SQL로 변환하여 실제로 실행한다.
+     *
+     * createTable/alterTable/dropTable/rawQuery는 up()/down() 내에서 컨텍스트를
+     * 수집하기만 하므로, 여기서 resolve()하여 트랜잭션에 실행해야 실제 반영된다.
+     */
+    private fun applyContexts(migrationObj: Migration, context: TransactionContext) {
+        migrationObj.contexts.forEach { schemaContext ->
+            schemaContext.resolve().forEach { sql ->
+                if (config.showSql) {
+                    logger.info("Executing SQL: $sql")
+                }
+                context.execute(sql)
+            }
+        }
+        migrationObj.clearContexts()
     }
 
     /**
@@ -48,6 +67,7 @@ class MigrationExecutor(
         // 새로운 컨텍스트 패턴 사용
         MigrationContext.runInContext(adapter, context, config) {
             migrationObj.down()
+            applyContexts(migrationObj, context)
 
             if (config.showSql) {
                 logger.info("Migration ${migration.name} rolled back successfully")

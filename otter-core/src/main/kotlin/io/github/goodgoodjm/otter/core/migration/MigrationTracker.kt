@@ -18,11 +18,13 @@ class MigrationTracker(
 
     /**
      * 마이그레이션 추적 테이블 초기화
+     *
+     * CREATE TABLE IF NOT EXISTS로 멱등하게 생성한다. 존재 여부를
+     * information_schema로 별도 조회하면 스키마를 구분하지 못해
+     * 다른 스키마의 동명 테이블을 오탐할 수 있으므로 사용하지 않는다.
      */
     fun initialize(context: TransactionContext) {
-        if (!tableExists(context)) {
-            createMigrationTable(context)
-        }
+        createMigrationTable(context)
     }
 
     /**
@@ -53,43 +55,6 @@ class MigrationTracker(
     fun removeMigration(name: String, context: TransactionContext) {
         val sql = "DELETE FROM $MIGRATION_TABLE WHERE filename = ?"
         context.execute(sql, listOf(name))
-    }
-
-    /**
-     * 마이그레이션 테이블 존재 여부 확인
-     */
-    private fun tableExists(context: TransactionContext): Boolean {
-        val capabilities = adapter.getCapabilities()
-
-        val sql = when {
-            // PostgreSQL, MySQL 등 information_schema를 지원하는 DB
-            capabilities.supportsSchemas -> """
-                SELECT COUNT(*)
-                FROM information_schema.tables
-                WHERE table_name = '$MIGRATION_TABLE'
-            """.trimIndent()
-
-            // SQLite
-            adapter.name.lowercase() == "sqlite" -> """
-                SELECT COUNT(*)
-                FROM sqlite_master
-                WHERE type = 'table'
-                AND name = '$MIGRATION_TABLE'
-            """.trimIndent()
-
-            // H2
-            else -> """
-                SELECT COUNT(*)
-                FROM INFORMATION_SCHEMA.TABLES
-                WHERE TABLE_NAME = UPPER('$MIGRATION_TABLE')
-            """.trimIndent()
-        }
-
-        val result = context.queryOne(sql) { rs ->
-            rs.getInt(1) > 0
-        }
-
-        return result ?: false
     }
 
     /**
@@ -127,24 +92,15 @@ class MigrationTracker(
     }
 
     /**
-     * INSERT SQL 생성 (DB별 차이 처리)
+     * INSERT SQL 생성
+     *
+     * 삽입된 id를 사용하지 않으므로 RETURNING 절은 두지 않는다.
+     * (RETURNING을 붙이면 결과셋이 반환되어 executeUpdate 경로에서 오류가 발생한다)
      */
     private fun buildInsertSql(): String {
-        val capabilities = adapter.getCapabilities()
-
-        return if (capabilities.supportsReturning) {
-            // PostgreSQL 등 RETURNING 지원
-            """
-                INSERT INTO $MIGRATION_TABLE (filename, comment, created_at)
-                VALUES (?, ?, ?)
-                RETURNING id
-            """.trimIndent()
-        } else {
-            // 일반적인 INSERT
-            """
-                INSERT INTO $MIGRATION_TABLE (filename, comment, created_at)
-                VALUES (?, ?, ?)
-            """.trimIndent()
-        }
+        return """
+            INSERT INTO $MIGRATION_TABLE (filename, comment, created_at)
+            VALUES (?, ?, ?)
+        """.trimIndent()
     }
 }
