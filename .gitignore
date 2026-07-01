@@ -40,3 +40,6 @@ out/
 
 # Request files
 request.md
+
+# oh-my-claudecode tool state
+.omc/
