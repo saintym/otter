@@ -27,7 +27,9 @@ class PostgreSQLConnectionProvider(config: DatabaseConfig) : ConnectionProvider 
             driverClassName = config.driverClassName ?: "org.postgresql.Driver"
             maximumPoolSize = config.connectionPoolSize
             connectionTimeout = config.connectionTimeout
-            
+            // 풀 생성 시점에 즉시 실패하지 않도록 하여, 연결 검증은 validate()에서 처리한다
+            initializationFailTimeout = -1
+
             // PostgreSQL specific settings
             addDataSourceProperty("cachePrepStmts", "true")
             addDataSourceProperty("prepStmtCacheSize", "250")

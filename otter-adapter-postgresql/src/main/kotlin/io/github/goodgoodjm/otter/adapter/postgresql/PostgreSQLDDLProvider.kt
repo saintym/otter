@@ -69,8 +69,8 @@ class PostgreSQLDDLProvider : DDLProvider {
         
         val unique = if (ColumnModifier.UNIQUE in column.modifiers) " UNIQUE" else ""
         
-        val defaultValue = column.defaultValue?.let { 
-            " DEFAULT ${typeMapper.getSqlLiteral(it)}" 
+        val defaultValue = column.defaultValue?.let {
+            " DEFAULT ${renderDefaultExpression(it)}"
         } ?: ""
 
         val generated = when {
@@ -87,6 +87,30 @@ class PostgreSQLDDLProvider : DDLProvider {
         } ?: ""
 
         return "${column.name} $type$notNull$unique$defaultValue$generated$references"
+    }
+
+    /**
+     * 기본값 표현식을 렌더링한다.
+     * CURRENT_TIMESTAMP, NOW() 같은 SQL 함수/키워드는 인용 없이 그대로 사용하고,
+     * 그 외의 값은 타입에 맞는 리터럴로 인용한다.
+     */
+    private fun renderDefaultExpression(raw: Any): String {
+        if (raw is String) {
+            val trimmed = raw.trim()
+            val isKeyword = trimmed.uppercase() in NON_LITERAL_DEFAULTS
+            val isFunctionCall = FUNCTION_CALL_REGEX.matches(trimmed)
+            if (isKeyword || isFunctionCall) return trimmed
+            return typeMapper.getSqlLiteral(trimmed)
+        }
+        return typeMapper.getSqlLiteral(raw)
+    }
+
+    companion object {
+        private val NON_LITERAL_DEFAULTS = setOf(
+            "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME",
+            "LOCALTIME", "LOCALTIMESTAMP", "TRUE", "FALSE", "NULL"
+        )
+        private val FUNCTION_CALL_REGEX = Regex("^[A-Za-z_][A-Za-z0-9_.]*\\s*\\(.*\\)$")
     }
 
     private fun buildReferentialActions(onUpdate: ReferentialAction, onDelete: ReferentialAction): String {
