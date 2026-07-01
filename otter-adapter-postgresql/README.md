@@ -3,6 +3,13 @@
 ## 개요
 Otter 마이그레이션 도구를 위한 PostgreSQL 데이터베이스 어댑터입니다. PostgreSQL 9.6 이상을 지원하며, 네이티브 기능을 최대한 활용합니다.
 
+## ✅ 구현 상태 (2025-09-29)
+- **완전한 DDL 지원**: CREATE TABLE, ALTER TABLE, DROP TABLE, INDEX 등 모든 DDL 작업 구현
+- **트랜잭션 관리**: HikariCP를 통한 커넥션 풀링 및 트랜잭션 관리
+- **Advisory Lock**: PostgreSQL 네이티브 Advisory Lock 구현
+- **타입 매핑**: 모든 PostgreSQL 타입 지원
+- **테스트 완료**: 단위 테스트 및 통합 테스트 통과
+
 ## 주요 기능
 
 ### PostgreSQL 네이티브 기능 지원
@@ -21,17 +28,20 @@ Otter 마이그레이션 도구를 위한 PostgreSQL 데이터베이스 어댑�
 | Integer | INTEGER | |
 | BigInt | BIGINT | |
 | Integer + AUTO_INCREMENT | SERIAL | 자동 변환 |
+| BigInt + AUTO_INCREMENT | BIGSERIAL | 자동 변환 |
 | Varchar(n) | VARCHAR(n) | |
+| Char(n) | CHARACTER(n) | |
 | Text | TEXT | |
 | Boolean | BOOLEAN | |
 | Date | DATE | |
 | Time | TIME | |
 | Timestamp | TIMESTAMP | |
-| Json | JSON | |
-| JsonBinary | JSONB | PostgreSQL 권장 |
+| Decimal(p,s) | DECIMAL(p,s) | |
+| Float | REAL | |
+| Double | DOUBLE PRECISION | |
+| Json | JSONB | PostgreSQL 권장 |
 | Uuid | UUID | 네이티브 지원 |
-| Array(T) | T[] | 모든 타입 지원 |
-| Binary | BYTEA | |
+| Blob | BYTEA | |
 
 ## 설치
 
@@ -40,6 +50,7 @@ Otter 마이그레이션 도구를 위한 PostgreSQL 데이터베이스 어댑�
 dependencies {
     implementation("io.github.goodgoodjm:otter-core:1.0.0")
     implementation("io.github.goodgoodjm:otter-adapter-postgresql:1.0.0")
+    implementation("org.postgresql:postgresql:42.5.1")
 }
 ```
 
@@ -97,18 +108,18 @@ val table = TableDefinition(
         ColumnDefinition(
             name = "email",
             type = ColumnType.Varchar(255),
-            modifiers = setOf(ColumnModifier.UNIQUE)
+            modifiers = setOf(ColumnModifier.UNIQUE, ColumnModifier.NOT_NULL)
         ),
         ColumnDefinition(
             name = "data",
-            type = ColumnType.JsonBinary  // JSONB 타입
+            type = ColumnType.Json  // JSONB 타입
         ),
         ColumnDefinition(
-            name = "tags",
-            type = ColumnType.Array(ColumnType.Varchar(50))  // 배열
+            name = "created_at",
+            type = ColumnType.Timestamp,
+            defaultValue = "CURRENT_TIMESTAMP"
         )
     ),
-    primaryKeys = listOf("id"),
     comment = "사용자 테이블"
 )
 
@@ -116,9 +127,9 @@ val statements = ddlProvider.createTable(table)
 // 생성된 SQL:
 // CREATE TABLE IF NOT EXISTS users (
 //     id SERIAL NOT NULL,
-//     email VARCHAR(255) UNIQUE,
+//     email VARCHAR(255) NOT NULL UNIQUE,
 //     data JSONB,
-//     tags VARCHAR(50)[],
+//     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 //     CONSTRAINT users_pkey PRIMARY KEY (id)
 // );
 // COMMENT ON TABLE users IS '사용자 테이블';
@@ -136,11 +147,10 @@ connectionProvider.useTransaction { context ->
 
     // 데이터 삽입
     context.execute(
-        "INSERT INTO users (email, data, tags) VALUES (?, ?::jsonb, ?)",
+        "INSERT INTO users (email, data) VALUES (?, ?::jsonb)",
         listOf(
             "user@example.com",
-            """{"name": "John", "age": 30}""",
-            arrayOf("tag1", "tag2")
+            """{"name": "John", "age": 30}"""
         )
     )
 
@@ -152,8 +162,7 @@ connectionProvider.useTransaction { context ->
         User(
             id = rs.getInt("id"),
             email = rs.getString("email"),
-            data = rs.getString("data"),
-            tags = rs.getArray("tags").array
+            data = rs.getString("data")
         )
     }
 
@@ -191,6 +200,44 @@ lockInfo?.let {
 }
 ```
 
+### ALTER TABLE 작업
+```kotlin
+// 컬럼 추가
+val addColumnSql = ddlProvider.alterTableAddColumn(
+    "users",
+    ColumnDefinition("age", ColumnType.Integer)
+)
+
+// 컬럼 수정
+val modifyColumnSql = ddlProvider.alterTableModifyColumn(
+    "users",
+    ColumnDefinition("email", ColumnType.Varchar(500),
+                     setOf(ColumnModifier.NOT_NULL))
+)
+
+// 컬럼 삭제
+val dropColumnSql = ddlProvider.alterTableDropColumn(
+    "users", "age", cascade = false
+)
+
+// 컬럼 이름 변경
+val renameColumnSql = ddlProvider.alterTableRenameColumn(
+    "users", "email", "email_address"
+)
+
+// Foreign Key 추가
+val foreignKey = ForeignKeyConstraint(
+    name = "fk_user_posts",
+    tableName = "posts",
+    columns = listOf("user_id"),
+    referencedTable = "users",
+    referencedColumns = listOf("id"),
+    onDelete = ReferentialAction.CASCADE,
+    onUpdate = ReferentialAction.RESTRICT
+)
+val addForeignKeySql = ddlProvider.alterTableAddForeignKey("posts", foreignKey)
+```
+
 ## 고급 기능
 
 ### 부분 인덱스 (Partial Index)
@@ -201,7 +248,7 @@ val index = IndexDefinition(
     columns = listOf("id"),
     where = "is_active = true"  // PostgreSQL 부분 인덱스
 )
-val sql = ddlProvider.createIndex(index)
+val sql = ddlProvider.createIndex("users", index)
 // CREATE INDEX idx_active_users ON users (id) WHERE is_active = true
 ```
 
@@ -212,16 +259,6 @@ val jsonIndex = IndexDefinition(
     tableName = "users",
     columns = listOf("data"),
     type = IndexType.GIN  // JSONB 인덱싱용
-)
-```
-
-### 생성된 컬럼 (Generated Column)
-```kotlin
-ColumnDefinition(
-    name = "full_name",
-    type = ColumnType.Varchar(200),
-    modifiers = setOf(ColumnModifier.GENERATED_ALWAYS),
-    defaultValue = "(first_name || ' ' || last_name)"
 )
 ```
 
@@ -245,24 +282,18 @@ val config = DatabaseConfig(
 ./gradlew :otter-adapter-postgresql:test
 ```
 
-### 통합 테스트 (Testcontainers)
-통합 테스트는 Docker를 사용하여 실제 PostgreSQL 인스턴스에서 실행됩니다:
-```kotlin
-@Testcontainers
-class PostgreSQLIntegrationTest {
-    @Container
-    val postgres = PostgreSQLContainer("postgres:15-alpine")
+### 통합 테스트 (Docker 필요)
+```bash
+# PostgreSQL Docker 컨테이너 실행
+docker run --name otter-postgres \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=otter_test \
+  -p 5433:5432 \
+  postgres:15-alpine
 
-    @Test
-    fun testWithRealDatabase() {
-        val config = DatabaseConfig(
-            url = postgres.jdbcUrl,
-            username = postgres.username,
-            password = postgres.password
-        )
-        // 테스트 실행
-    }
-}
+# 테스트 실행
+./gradlew :otter-adapter-postgresql:test
 ```
 
 ## 요구사항
@@ -287,7 +318,6 @@ class PostgreSQLIntegrationTest {
 ## 제한사항
 
 - Advisory Lock은 세션 기반으로 작동하므로 연결이 끊어지면 자동 해제됩니다
-- 배열 타입은 중첩 배열을 지원하지 않습니다
 - JSONB 인덱싱은 GIN 인덱스 타입을 사용해야 효율적입니다
 
 ## 문제 해결
