@@ -193,7 +193,7 @@ class PostgreSQLDDLProviderTest {
             unique = true
         )
 
-        val sql = ddlProvider.createIndex(index)
+        val sql = ddlProvider.createIndex("users", index)
         assertEquals("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email)", sql)
     }
 
@@ -206,7 +206,7 @@ class PostgreSQLDDLProviderTest {
             where = "is_active = true"
         )
 
-        val sql = ddlProvider.createIndex(index)
+        val sql = ddlProvider.createIndex("users", index)
         assertTrue(sql.contains("WHERE is_active = true"))
     }
 

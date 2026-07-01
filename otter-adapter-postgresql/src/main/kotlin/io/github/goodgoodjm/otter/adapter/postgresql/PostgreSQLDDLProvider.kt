@@ -55,7 +55,7 @@ class PostgreSQLDDLProvider : DDLProvider {
 
         // Create indexes
         table.indexes.forEach { index ->
-            statements.add(createIndex(index))
+            statements.add(createIndex(table.name, index))
         }
 
         return statements
@@ -153,7 +153,7 @@ class PostgreSQLDDLProvider : DDLProvider {
                     "ALTER TABLE $tableName DROP CONSTRAINT ${alteration.constraintName}$cascade"
                 }
                 is TableAlteration.AddIndex -> {
-                    createIndex(alteration.index)
+                    createIndex(tableName, alteration.index)
                 }
                 is TableAlteration.DropIndex -> {
                     dropIndex(alteration.indexName)
@@ -182,12 +182,12 @@ class PostgreSQLDDLProvider : DDLProvider {
         return "DROP TABLE IF EXISTS $tableName$cascadeClause"
     }
 
-    override fun createIndex(index: IndexDefinition): String {
+    override fun createIndex(tableName: String, index: IndexDefinition): String {
         val unique = if (index.unique) "UNIQUE " else ""
         val using = if (index.type != IndexType.BTREE) " USING ${index.type}" else ""
         val where = index.where?.let { " WHERE $it" } ?: ""
-        
-        return "CREATE ${unique}INDEX IF NOT EXISTS ${index.name} ON ${index.tableName}$using (${index.columns.joinToString(", ")})$where"
+
+        return "CREATE ${unique}INDEX IF NOT EXISTS ${index.name} ON ${tableName}$using (${index.columns.joinToString(", ")})$where"
     }
 
     override fun dropIndex(indexName: String, tableName: String?): String {
@@ -236,5 +236,61 @@ class PostgreSQLDDLProvider : DDLProvider {
 
     override fun addTableComment(tableName: String, comment: String): String {
         return "COMMENT ON TABLE $tableName IS '$comment'"
+    }
+
+    override fun alterTableAddColumn(tableName: String, column: ColumnDefinition): String {
+        val columnDef = buildColumnDefinition(column)
+        return "ALTER TABLE $tableName ADD COLUMN $columnDef"
+    }
+
+    override fun alterTableModifyColumn(tableName: String, column: ColumnDefinition): String {
+        val type = typeMapper.mapTypeWithModifiers(column.type, column.modifiers)
+        val alterStatements = mutableListOf<String>()
+
+        // PostgreSQL requires separate statements for type and constraints
+        alterStatements.add("ALTER TABLE $tableName ALTER COLUMN ${column.name} TYPE $type")
+
+        if (ColumnModifier.NOT_NULL in column.modifiers) {
+            alterStatements.add("ALTER TABLE $tableName ALTER COLUMN ${column.name} SET NOT NULL")
+        } else {
+            alterStatements.add("ALTER TABLE $tableName ALTER COLUMN ${column.name} DROP NOT NULL")
+        }
+
+        column.defaultValue?.let { default ->
+            val defaultStr = when (default) {
+                is String -> "'$default'"
+                else -> default.toString()
+            }
+            alterStatements.add("ALTER TABLE $tableName ALTER COLUMN ${column.name} SET DEFAULT $defaultStr")
+        }
+
+        return alterStatements.joinToString("; ")
+    }
+
+    override fun alterTableDropColumn(tableName: String, columnName: String, cascade: Boolean): String {
+        val cascadeClause = if (cascade) " CASCADE" else ""
+        return "ALTER TABLE $tableName DROP COLUMN $columnName$cascadeClause"
+    }
+
+    override fun alterTableRenameColumn(tableName: String, oldName: String, newName: String): String {
+        return "ALTER TABLE $tableName RENAME COLUMN $oldName TO $newName"
+    }
+
+    override fun alterTableAddPrimaryKey(tableName: String, columns: List<String>): String {
+        val constraintName = "${tableName}_pkey"
+        return "ALTER TABLE $tableName ADD CONSTRAINT $constraintName PRIMARY KEY (${columns.joinToString(", ")})"
+    }
+
+    override fun alterTableDropPrimaryKey(tableName: String): String {
+        val constraintName = "${tableName}_pkey"
+        return "ALTER TABLE $tableName DROP CONSTRAINT $constraintName"
+    }
+
+    override fun alterTableAddForeignKey(tableName: String, foreignKey: ForeignKeyConstraint): String {
+        return addForeignKey(foreignKey)
+    }
+
+    override fun alterTableDropForeignKey(tableName: String, constraintName: String): String {
+        return dropForeignKey(constraintName, tableName)
     }
 }

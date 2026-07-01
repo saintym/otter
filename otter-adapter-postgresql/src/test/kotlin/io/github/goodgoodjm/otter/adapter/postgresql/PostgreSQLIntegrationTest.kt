@@ -182,7 +182,7 @@ class PostgreSQLIntegrationTest {
             }
 
             assertNotNull(result)
-            assertTrue(result["active"] as Boolean)
+            assertTrue(result?.get("active") as Boolean)
             
             // Clean up
             context.execute("DROP TABLE pg_types_test")
@@ -210,7 +210,7 @@ class PostgreSQLIntegrationTest {
         // Get lock info
         val lockInfo = lockProvider.getLockInfo(lockId)
         assertNotNull(lockInfo)
-        assertEquals(lockId, lockInfo.lockId)
+        assertEquals(lockId, lockInfo?.lockId)
 
         // Release lock
         assertTrue(lockProvider.releaseLock(lockId))
