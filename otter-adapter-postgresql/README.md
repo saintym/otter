@@ -343,7 +343,7 @@ Failed to acquire migration lock
 ## 기여
 
 버그 리포트와 풀 리퀘스트는 GitHub에서 받습니다:
-https://github.com/GoodGoodJM/Otter
+https://github.com/saintym/otter
 
 ## 라이선스
 MIT

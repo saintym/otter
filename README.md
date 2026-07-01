@@ -303,7 +303,7 @@ alterTable("users") {
 
 ### 개발 환경 설정
 ```bash
-git clone https://github.com/GoodGoodJM/Otter.git
+git clone https://github.com/saintym/otter.git
 cd Otter
 ./gradlew build
 ```
