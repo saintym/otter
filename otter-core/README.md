@@ -7,7 +7,7 @@ Otter Core는 데이터베이스 마이그레이션 도구의 핵심 엔진입�
 - **✅ Exposed 라이브러리 완전 제거**: 순수 JDBC 기반으로 전환 완료
 - **✅ DB 중립적 아키텍처**: 모든 DB 기능을 인터페이스로 추상화 완료
 - **✅ 플러그인 시스템**: DB별 어댑터를 별도 모듈로 분리 완료
-- **✅ 테스트 성공률 98.7%**: 77개 중 76개 테스트 통과
+- **✅ 테스트 성공률 100%**: 90개 테스트 전체 통과
 
 ## 디렉토리 구조
 
@@ -157,25 +157,26 @@ val BOOLEAN get() = Type.BOOLEAN
 ./gradlew :otter-core:test
 ```
 
-### 테스트 결과 (2025-09-29)
+### 테스트 결과
 ```
-총 테스트: 77
-성공: 76 (98.7%)
-실패: 1 (LockProvider 동시성 테스트)
+총 테스트: 90
+성공: 90 (100%)
+실패: 0
 
+✅ AdapterRegistryTest: 8/8 (100%)
 ✅ AlterTableTests: 8/8 (100%)
 ✅ ConstraintTests: 10/10 (100%)
-✅ CreateTableContextTests: 1/1 (100%)
-✅ DownMigrationTests: 7/7 (100%)
-✅ MigrationTests: 2/2 (100%)
-✅ DependencyAnalyzerTests: 6/6 (100%)
-✅ AdapterRegistryTest: 8/8 (100%)
+✅ CreateTableContextTests: 5/5 (100%)
 ✅ DatabaseAdapterTest: 6/6 (100%)
-⚠️ LockProviderTest: 7/8 (87.5%)
+✅ DependencyAnalyzerTests: 6/6 (100%)
+✅ DownMigrationTests: 7/7 (100%)
+✅ ImprovedLockProviderTest: 5/5 (100%)
+✅ LockProviderTest: 8/8 (100%)
+✅ MigrationTests: 2/2 (100%)
+✅ NewSystemIntegrationTest: 5/5 (100%)
+✅ SecureMigrationScriptEngineTests: 10/10 (100%)
 ✅ TypeMapperTest: 7/7 (100%)
 ✅ UserInputHandlerTests: 3/3 (100%)
-✅ SecureMigrationScriptEngineTests: 10/10 (100%)
-✅ DebugTest: 1/1 (100%)
 ```
 
 ### 테스트 구조

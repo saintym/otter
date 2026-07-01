@@ -10,7 +10,7 @@ DB Migration Tool for Kotlin - A database-agnostic migration framework.
 - **✅ Exposed 의존성 완전 제거**: Exposed ORM 프레임워크 완전 제거
 - **✅ 순수 JDBC 구현**: HikariCP를 통한 커넥션 풀링과 직접적인 데이터베이스 접근
 - **✅ DatabaseAdapter 패턴**: 데이터베이스 엔진 간 깔끔한 분리
-- **✅ 98% 테스트 성공률**: 77개 중 76개 테스트 통과
+- **✅ 100% 테스트 성공률**: otter-core 90개 테스트 전체 통과
 - **✅ 완벽한 DSL 호환성**: 기존 마이그레이션 스크립트 변경 없이 작동
 
 ### 🏗️ 새로운 아키텍처 구성요소
@@ -46,18 +46,24 @@ otter/
 
 ### 📊 테스트 커버리지
 ```
-총 테스트: 77
-성공: 76 (98.7%)
-실패: 1 (LockProvider 동시성 테스트 타이밍 이슈)
+총 테스트: 90
+성공: 90 (100%)
+실패: 0
 
+✅ AdapterRegistryTest: 8/8 (100%)
 ✅ AlterTableTests: 8/8 (100%)
-✅ DownMigrationTests: 7/7 (100%)
 ✅ ConstraintTests: 10/10 (100%)
-✅ CreateTableContextTests: 1/1 (100%)
-✅ SecurityTests: 10/10 (100%)
-✅ AdapterTests: 14/14 (100%)
+✅ CreateTableContextTests: 5/5 (100%)
+✅ DatabaseAdapterTest: 6/6 (100%)
 ✅ DependencyAnalyzerTests: 6/6 (100%)
-⚠️ LockProviderTest: 7/8 (87.5%)
+✅ DownMigrationTests: 7/7 (100%)
+✅ ImprovedLockProviderTest: 5/5 (100%)
+✅ LockProviderTest: 8/8 (100%)
+✅ MigrationTests: 2/2 (100%)
+✅ NewSystemIntegrationTest: 5/5 (100%)
+✅ SecureMigrationScriptEngineTests: 10/10 (100%)
+✅ TypeMapperTest: 7/7 (100%)
+✅ UserInputHandlerTests: 3/3 (100%)
 ```
 
 ## 빠른 시작
@@ -320,9 +326,9 @@ docker run --name otter-postgres \
 ```
 
 ### 테스트 현황
-- ✅ **Core 모듈 테스트**: 76/77 성공 (98.7%)
-- ✅ **PostgreSQL 어댑터 테스트**: 완료
-- ✅ **Spring Boot Starter 테스트**: 완료
+- ✅ **Core 모듈 테스트**: 90/90 성공 (100%)
+- 🐳 **PostgreSQL 어댑터 테스트**: Docker(Testcontainers) 환경 필요
+- 🐳 **Spring Boot Starter 테스트**: PostgreSQL 및 JDK 11 환경 필요
 
 ## 라이선스
 MIT License
