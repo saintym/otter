@@ -8,6 +8,10 @@ object : Migration() {
     override val comment = "ALTER TABLE - 컬럼 수정 테스트 (MODIFY)"
 
     override fun up() {
+        // phone은 M004에서 nullable로 추가되어 기존 행이 NULL이므로,
+        // NOT NULL로 변경하기 전에 기본값으로 백필한다.
+        rawQuery("UPDATE users SET phone = '000-0000' WHERE phone IS NULL")
+
         // users 테이블 컬럼 수정
         alterTable("users") {
             // email 컬럼 크기 변경 및 UNIQUE 추가

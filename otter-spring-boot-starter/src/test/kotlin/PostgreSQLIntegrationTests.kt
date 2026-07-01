@@ -1,5 +1,4 @@
 import io.github.goodgoodjm.otter.OtterAutoConfiguration
-import io.github.goodgoodjm.otter.core.Otter
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestMethodOrder
@@ -13,41 +12,24 @@ import java.sql.DriverManager
 class PostgreSQLIntegrationTests {
     private val contextRunner = ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(OtterAutoConfiguration::class.java))
-    
-    companion object {
-        const val DB_BASE_URL = "jdbc:postgresql://localhost:5433/otter_test"
-        const val DB_USER = "postgres"
-        const val DB_PASSWORD = "postgres"
-        const val DB_DRIVER = "org.postgresql.Driver"
-        
-        fun getSchemaUrl(schemaName: String): String {
-            return "${DB_BASE_URL}?currentSchema=${schemaName}"
-        }
-    }
-    
-    private fun cleanSchema(schemaName: String) {
-        // 스키마를 삭제하고 다시 생성하여 완전히 정리
-        DriverManager.getConnection(DB_BASE_URL, DB_USER, DB_PASSWORD).use { conn ->
-            conn.createStatement().use { stmt ->
-                stmt.execute("DROP SCHEMA IF EXISTS $schemaName CASCADE")
-                stmt.execute("CREATE SCHEMA $schemaName")
-            }
-        }
-    }
-    
+
+    private val dbUser = OtterPostgresContainer.USERNAME
+    private val dbPassword = OtterPostgresContainer.PASSWORD
+    private val dbDriver = OtterPostgresContainer.DRIVER
+
     @Test
     @Order(1)
     fun testPostgreSQLMigrationWithNewFiles() {
         val schemaName = "otter_integration_test"
-        val dbUrl = getSchemaUrl(schemaName)
-        cleanSchema(schemaName)
+        val dbUrl = OtterPostgresContainer.schemaUrl(schemaName)
+        OtterPostgresContainer.resetSchema(schemaName)
 
         // M003까지만 실행 (기본 테이블 + 외래키 + 데이터 삽입)
         contextRunner.withPropertyValues(
-            "otter.driverClassName=$DB_DRIVER",
+            "otter.driverClassName=$dbDriver",
             "otter.url=$dbUrl",
-            "otter.username=$DB_USER",
-            "otter.password=$DB_PASSWORD",
+            "otter.username=$dbUser",
+            "otter.password=$dbPassword",
             "otter.migrationPath=migrations",
             "otter.showSql=true",
             "otter.version=M003_InsertSampleData.kts",
@@ -56,7 +38,7 @@ class PostgreSQLIntegrationTests {
             // SpringBoot 컨텍스트가 정상적으로 시작되는지 확인
             assertThat(context).getBean(OtterAutoConfiguration::class.java)
 
-            DriverManager.getConnection(dbUrl, DB_USER, DB_PASSWORD).use { conn ->
+            DriverManager.getConnection(dbUrl, dbUser, dbPassword).use { conn ->
                 conn.createStatement().use { stmt ->
                     // M001에서 생성된 users, posts 테이블 확인
                     val basicTablesCount = stmt.executeQuery("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$schemaName' AND table_name IN ('users', 'posts')")
@@ -77,8 +59,8 @@ class PostgreSQLIntegrationTests {
                     postsCount.next()
                     assertThat(postsCount.getInt(1)).isEqualTo(3)
 
-                    // 마이그레이션 기록 확인
-                    val migrationRecords = stmt.executeQuery("SELECT COUNT(*) FROM otter_migration WHERE filename IN ('M001_CreateBasicTables.kts', 'M002_CreateForeignKeyTables.kts', 'M003_InsertSampleData.kts')")
+                    // 마이그레이션 기록 확인 (파일명은 확장자 없이 저장됨)
+                    val migrationRecords = stmt.executeQuery("SELECT COUNT(*) FROM otter_migration WHERE filename IN ('M001_CreateBasicTables', 'M002_CreateForeignKeyTables', 'M003_InsertSampleData')")
                     migrationRecords.next()
                     assertThat(migrationRecords.getInt(1)).isEqualTo(3)
                 }

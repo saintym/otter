@@ -26,8 +26,12 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(kotlin("script-runtime"))
 
-    testImplementation("com.h2database:h2")
+    // 통합 테스트는 Testcontainers로 실제 PostgreSQL을 사용한다
+    testImplementation(project(":otter-adapter-postgresql"))
     testImplementation("org.postgresql:postgresql")
+    testImplementation("org.testcontainers:testcontainers:1.19.3")
+    testImplementation("org.testcontainers:postgresql:1.19.3")
+    testImplementation("org.testcontainers:junit-jupiter:1.19.3")
     testImplementation("ch.qos.logback:logback-classic:1.2.6")
 }
 
