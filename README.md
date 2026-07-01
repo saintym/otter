@@ -295,7 +295,7 @@ alterTable("users") {
 - [Core 모듈 문서](./otter-core/README.md)
 - [PostgreSQL 어댑터 문서](./otter-adapter-postgresql/README.md)
 - [Spring Boot Starter 문서](./otter-spring-boot-starter/README.md)
-- [아키텍처 설계](./DB_AGNOSTIC_ARCHITECTURE_PLAN.md)
+- [Exposed 제거 설계 노트](./docs/EXPOSED_REMOVAL_COMPLETE_PLAN.md)
 
 ## 기여
 
