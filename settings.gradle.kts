@@ -1,6 +1,7 @@
 rootProject.name = "otter"
-include("otter-spring-boot-starter")
 include("otter-core")
+include("otter-adapter-postgresql")
+include("otter-spring-boot-starter")
 // include("otter-plugin")
 
 pluginManagement {

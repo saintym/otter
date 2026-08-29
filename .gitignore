@@ -37,3 +37,9 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# Request files
+request.md
+
+# oh-my-claudecode tool state
+.omc/

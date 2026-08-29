@@ -5,9 +5,9 @@ import io.github.goodgoodjm.otter.core.dsl.Constraint.*
 import io.github.goodgoodjm.otter.core.dsl.createtable.and
 import io.github.goodgoodjm.otter.core.dsl.createtable.constraints
 import io.github.goodgoodjm.otter.core.dsl.createtable.foreignKey
-import io.github.goodgoodjm.otter.core.dsl.type.Type.BOOL
+import io.github.goodgoodjm.otter.core.dsl.type.Type.BOOLEAN as BOOL
 import io.github.goodgoodjm.otter.core.dsl.type.Type.INT
-import io.github.goodgoodjm.otter.core.dsl.type.Type.LONG
+import io.github.goodgoodjm.otter.core.dsl.type.Type.BIGINT as LONG
 import io.github.goodgoodjm.otter.core.dsl.type.Type.VARCHAR
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -20,7 +20,7 @@ class MigrationTests {
                 createTable("person") {
                     "id" - INT constraints PRIMARY and AUTO_INCREMENT
                     "name" - VARCHAR(30)
-                    "message" - VARCHAR
+                    "message" - VARCHAR()
                     "address_id" - INT foreignKey "address(id)"
                     "lat" - LONG constraints UNIQUE
                     "nullable" - BOOL constraints NULLABLE

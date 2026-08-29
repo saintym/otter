@@ -1,65 +1,220 @@
 package io.github.goodgoodjm.otter.core.dsl.createtable
 
 import io.github.goodgoodjm.otter.core.Logger
-import io.github.goodgoodjm.otter.core.dsl.Constraint
+import io.github.goodgoodjm.otter.core.adapter.model.ColumnDefinition
+import io.github.goodgoodjm.otter.core.adapter.model.ColumnModifier
+import io.github.goodgoodjm.otter.core.adapter.model.TableDefinition
+import io.github.goodgoodjm.otter.core.adapter.model.UniqueConstraint
+import io.github.goodgoodjm.otter.core.adapter.model.ForeignKeyConstraint
+import io.github.goodgoodjm.otter.core.adapter.model.CheckConstraint
 import io.github.goodgoodjm.otter.core.dsl.SchemaContext
-import org.jetbrains.exposed.sql.Column
-import org.jetbrains.exposed.sql.Table
+import io.github.goodgoodjm.otter.core.dsl.type.*
+import io.github.goodgoodjm.otter.core.migration.MigrationContext
+import io.github.goodgoodjm.otter.core.adapter.model.ColumnType as AdapterColumnType
+import io.github.goodgoodjm.otter.core.adapter.model.ReferentialAction as AdapterReferentialAction
 
-class CreateTableContext constructor(val tableSchema: TableSchema) : SchemaContext {
+/**
+ * CREATE TABLE 컨텍스트 - 불변 타입 시스템
+ *
+ * 불변 Column 객체를 사용하여 thread-safe 보장
+ */
+class CreateTableContext(val tableName: String) : SchemaContext {
+
+    companion object : Logger
+
+    private val columns = mutableMapOf<String, Column>()
+
+    /**
+     * Get foreign key references for dependency analysis
+     */
+    fun getReferencedTables(): Set<String> {
+        return columns.values
+            .mapNotNull { column -> column.references?.table }
+            .toSet()
+    }
+
+    /**
+     * DSL 연산자 - 컬럼 추가
+     */
+    operator fun String.minus(column: Column): Column {
+        columns[this] = column
+        return column
+    }
+
     override fun resolve(): List<String> {
-        return DynamicPrimaryKeyTable.with(tableSchema).resolve()
-    }
-}
+        val tableDefinition = buildTableDefinition()
 
-class DynamicPrimaryKeyTable(name: String) : Table(name) {
-    companion object : Logger {
-        val REGEX = """([\w]+)\(([\w]+)\)""".toRegex()
+        return try {
+            val adapter = MigrationContext.getAdapter()
+            val ddlProvider = adapter.getDDLProvider()
 
-        fun with(tableSchema: TableSchema): DynamicPrimaryKeyTable = DynamicPrimaryKeyTable(tableSchema.name).apply {
-            tableSchema.columnSchemaMap.map { (key, value) -> addColumn(key, value) }
+            val statements = ddlProvider.createTable(tableDefinition)
+            logger.debug("Generated CREATE TABLE SQL for '$tableName': $statements")
+            statements
+        } catch (e: Exception) {
+            logger.error("Failed to generate CREATE TABLE SQL", e)
+            throw e
         }
     }
 
-    private var primaryKeys: Array<Column<*>> = arrayOf()
+    private fun buildTableDefinition(): TableDefinition {
+        val columnDefinitions = mutableListOf<ColumnDefinition>()
+        val primaryKeys = mutableListOf<String>()
+        val uniqueConstraints = mutableListOf<UniqueConstraint>()
+        val foreignKeys = mutableListOf<ForeignKeyConstraint>()
+        val checkConstraints = mutableListOf<CheckConstraint>()
 
-    override val primaryKey: PrimaryKey?
-        get() = if (primaryKeys.isEmpty()) {
-            null
-        } else {
-            PrimaryKey(primaryKeys)
+        columns.forEach { (name, column) ->
+            // 컬럼 타입 변환
+            val columnType = convertColumnType(column.type)
+            val modifiers = convertModifiers(column)
+
+            columnDefinitions.add(
+                ColumnDefinition(
+                    name = name,
+                    type = columnType,
+                    modifiers = modifiers,
+                    defaultValue = convertDefaultValue(column.defaultValue)
+                )
+            )
+
+            // Primary Key 수집
+            if (column.constraints.any { it is io.github.goodgoodjm.otter.core.dsl.Constraint.PRIMARY }) {
+                primaryKeys.add(name)
+            }
+
+            // Unique 제약조건
+            if (column.constraints.any { it is io.github.goodgoodjm.otter.core.dsl.Constraint.UNIQUE }) {
+                uniqueConstraints.add(
+                    UniqueConstraint(
+                        name = "${tableName}_${name}_unique",
+                        columns = listOf(name)
+                    )
+                )
+            }
+
+            // Foreign Key 처리
+            column.references?.let { ref ->
+                foreignKeys.add(
+                    ForeignKeyConstraint(
+                        name = "${tableName}_${name}_fk",
+                        tableName = tableName,
+                        columns = listOf(name),
+                        referencedTable = ref.table,
+                        referencedColumns = listOf(ref.column),
+                        onDelete = convertReferentialAction(ref.onDelete),
+                        onUpdate = convertReferentialAction(ref.onUpdate)
+                    )
+                )
+            }
+
+            // Check 제약조건
+            column.constraints.filterIsInstance<io.github.goodgoodjm.otter.core.dsl.Constraint.CHECK>()
+                .forEach { check ->
+                    checkConstraints.add(
+                        CheckConstraint(
+                            name = "${tableName}_${name}_check",
+                            expression = check.condition
+                        )
+                    )
+                }
         }
 
+        return TableDefinition(
+            name = tableName,
+            columns = columnDefinitions,
+            primaryKeys = primaryKeys,
+            uniqueConstraints = uniqueConstraints,
+            foreignKeys = foreignKeys,
+            checkConstraints = checkConstraints
+        )
+    }
 
-    private fun addColumn(name: String, columnSchema: ColumnSchema) {
-        var column = registerColumn<Comparable<Any>>(name, columnSchema.columnType)
-        columnSchema.constraints.forEach { constraint ->
+    private fun convertColumnType(type: ColumnType): AdapterColumnType {
+        return when (type) {
+            is ColumnType.TinyInt -> AdapterColumnType.Integer
+            is ColumnType.SmallInt -> AdapterColumnType.SmallInt
+            is ColumnType.Integer -> AdapterColumnType.Integer
+            is ColumnType.BigInt -> AdapterColumnType.BigInt
+            is ColumnType.Decimal -> AdapterColumnType.Decimal(type.precision, type.scale)
+            is ColumnType.Float -> AdapterColumnType.Float
+            is ColumnType.Double -> AdapterColumnType.Double
+            is ColumnType.Char -> AdapterColumnType.Char(type.length)
+            is ColumnType.Varchar -> AdapterColumnType.Varchar(type.length)
+            is ColumnType.Text -> AdapterColumnType.Text
+            is ColumnType.Date -> AdapterColumnType.Date
+            is ColumnType.Time -> AdapterColumnType.Time
+            is ColumnType.DateTime -> AdapterColumnType.Timestamp
+            is ColumnType.Timestamp -> AdapterColumnType.Timestamp
+            is ColumnType.Boolean -> AdapterColumnType.Boolean
+            is ColumnType.Uuid -> AdapterColumnType.Uuid
+            is ColumnType.Json -> AdapterColumnType.Json
+            is ColumnType.Blob -> AdapterColumnType.Blob
+            is ColumnType.Custom -> AdapterColumnType.Text  // Fallback
+        }
+    }
+
+    private fun convertModifiers(column: Column): Set<ColumnModifier> {
+        val modifiers = mutableSetOf<ColumnModifier>()
+
+        column.constraints.forEach { constraint ->
             when (constraint) {
-                is Constraint.PRIMARY, is Constraint.NOT_NULL -> null
-                is Constraint.NULLABLE -> column.columnType.nullable = true
-                is Constraint.AUTO_INCREMENT -> column = column.autoIncrement()
-                is Constraint.UNIQUE -> column = column.uniqueIndex()
-                is Constraint.DEFAULT -> {}
-                is Constraint.CHECK -> {}
-                is Constraint.REFERENCES -> {}
-                is Constraint.GENERATED -> {}
-                is Constraint.COLLATE -> {}
-                is Constraint.COMMENT -> {}
-                is Constraint.NONE -> null
+                is io.github.goodgoodjm.otter.core.dsl.Constraint.PRIMARY ->
+                    modifiers.add(ColumnModifier.PRIMARY_KEY)
+                is io.github.goodgoodjm.otter.core.dsl.Constraint.NOT_NULL ->
+                    modifiers.add(ColumnModifier.NOT_NULL)
+                is io.github.goodgoodjm.otter.core.dsl.Constraint.UNIQUE ->
+                    modifiers.add(ColumnModifier.UNIQUE)
+                is io.github.goodgoodjm.otter.core.dsl.Constraint.AUTO_INCREMENT ->
+                    modifiers.add(ColumnModifier.AUTO_INCREMENT)
+                else -> {}  // 다른 constraint는 별도 처리
             }
         }
 
-        columnSchema.foreignKey?.let { expression ->
-            val result = REGEX.find(expression) ?: throw Exception("Wrong foreignKey expression.")
-            val (tableName, columnName) = result.destructured
-            val target = Table(tableName).registerColumn<Comparable<Any>>(columnName, column.columnType)
-            column.references(target)
-        }
+        return modifiers
+    }
 
-        if (columnSchema.constraints.any { it is Constraint.PRIMARY }) {
-            primaryKeys += column
+    private fun convertDefaultValue(defaultValue: DefaultValue?): Any? {
+        return when (defaultValue) {
+            null -> null
+            is DefaultValue.Null -> null
+            is DefaultValue.Literal -> defaultValue.value
+            is DefaultValue.CurrentTimestamp -> "CURRENT_TIMESTAMP"
+            is DefaultValue.CurrentDate -> "CURRENT_DATE"
+            is DefaultValue.CurrentTime -> "CURRENT_TIME"
+            is DefaultValue.Expression -> defaultValue.sql
         }
     }
 
-    fun resolve(): List<String> = ddl + indices.flatMap { it.createStatement() }
+    private fun convertReferentialAction(action: ReferentialAction): AdapterReferentialAction {
+        return when (action) {
+            ReferentialAction.CASCADE -> AdapterReferentialAction.CASCADE
+            ReferentialAction.RESTRICT -> AdapterReferentialAction.RESTRICT
+            ReferentialAction.SET_NULL -> AdapterReferentialAction.SET_NULL
+            ReferentialAction.SET_DEFAULT -> AdapterReferentialAction.SET_DEFAULT
+            ReferentialAction.NO_ACTION -> AdapterReferentialAction.NO_ACTION
+        }
+    }
 }
+
+/**
+ * DSL 빌더 함수
+ */
+fun createTable(tableName: String, init: CreateTableContext.() -> Unit): List<String> {
+    val context = CreateTableContext(tableName)
+    context.init()
+    return context.resolve()
+}
+
+/**
+ * 사용 예제:
+ *
+ * createTableV2("users") {
+ *     "id" - serial()
+ *     "email" - varchar(255).notNull().unique()
+ *     "name" - varchar(100)
+ *     "bio" - text().defaultNull()
+ *     "created_at" - timestamp().defaultCurrentTimestamp()
+ *     "parent_id" - bigint().references("users", "id")
+ * }
+ */

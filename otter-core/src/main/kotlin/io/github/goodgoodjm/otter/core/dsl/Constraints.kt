@@ -65,3 +65,26 @@ val NO_ACTION = ReferenceAction.NO_ACTION
 
 val ALWAYS = GenerationType.ALWAYS
 val BY_DEFAULT = GenerationType.BY_DEFAULT
+
+/**
+ * Constraint combination for grouped constraints
+ */
+data class ConstraintGroup(val constraints: Set<Constraint>) : Constraint()
+
+/**
+ * and operator for combining constraints
+ * 예: (Constraint.NOT_NULL and Constraint.UNIQUE)
+ */
+infix fun Constraint.and(other: Constraint): ConstraintGroup {
+    val set = when {
+        this is ConstraintGroup && other is ConstraintGroup ->
+            this.constraints + other.constraints
+        this is ConstraintGroup ->
+            this.constraints + other
+        other is ConstraintGroup ->
+            setOf(this) + other.constraints
+        else ->
+            setOf(this, other)
+    }
+    return ConstraintGroup(set)
+}
